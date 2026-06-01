@@ -1,0 +1,220 @@
+/**
+ * commands/worktree.js
+ * Implements:
+ *   geet worktree add <branch> <dir>   — direct worktree add
+ *   geet worktree smart-add            — interactive, formats path automatically
+ *   geet worktree list                 — pick a worktree; copies path + opens shell
+ *   geet worktree remove               — interactive; delete a selected worktree
+ */
+
+import path from 'path';
+import os from 'os';
+import { symlink, mkdir, access } from 'fs/promises';
+import { constants } from 'fs';
+import { spawn } from 'child_process';
+import { execa } from 'execa';
+import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS } from '../config.js';
+import { addWorktree, removeWorktree, listWorktrees } from '../gitUtils.js';
+import {
+  intro,
+  outro,
+  logInfo,
+  logWarn,
+  logError,
+  logSuccess,
+  spinner,
+  promptSelectWorktree,
+  promptSelectWorktreeForRemove,
+  promptWorktreeSmartAdd,
+  promptBranchName,
+} from '../prompts.js';
+
+// ── worktree add <branch> <dir> ───────────────────────────────────────────────
+
+export async function worktreeAddAction(branch, dir, _options) {
+  intro('geet wt add');
+
+  const resolvedDir = path.resolve(dir);
+  const s = spinner();
+  s.start(`Adding worktree at "${resolvedDir}" for branch "${branch}"...`);
+  await addWorktree(branch, resolvedDir);
+  s.stop('Worktree created.');
+
+  await postWorktreeCreate(resolvedDir);
+}
+
+// ── worktree smart-add ────────────────────────────────────────────────────────
+
+export async function worktreeSmartAddAction(_options) {
+  intro('geet wt smart-add');
+
+  const { projectName, jiraName, description } = await promptWorktreeSmartAdd();
+
+  const folderName = `${jiraName}-${description}`;
+  const dir = path.join(WORKTREE_BASE, projectName, folderName);
+  const branch = `${BRANCH_PREFIX}${folderName}`;
+
+  logInfo(`Worktree path: ${dir}`);
+  logInfo(`Branch:        ${branch}`);
+
+  const s = spinner();
+  s.start('Creating worktree...');
+  await addWorktree(branch, dir);
+  s.stop('Worktree created.');
+
+  await postWorktreeCreate(dir);
+}
+
+// ── worktree list ─────────────────────────────────────────────────────────────
+
+export async function worktreeListAction(_options) {
+  intro('geet wt list');
+
+  const s = spinner();
+  s.start('Listing worktrees...');
+  const worktrees = await listWorktrees();
+  s.stop();
+
+  if (worktrees.length <= 1) {
+    logInfo('No other worktrees found.');
+    outro('Done.');
+    return;
+  }
+
+  const selected = await promptSelectWorktree(worktrees);
+
+  const { default: clipboard } = await import('clipboardy');
+  await clipboard.write(selected.path);
+  logSuccess(`Path copied to clipboard: ${selected.path}`);
+
+  outro(`Spawning shell in: ${selected.path}`);
+  spawnShellIn(selected.path);
+}
+
+// ── worktree remove ───────────────────────────────────────────────────────────
+
+export async function worktreeRemoveAction(_options) {
+  intro('geet wt remove');
+
+  const s = spinner();
+  s.start('Listing worktrees...');
+  const all = await listWorktrees();
+  s.stop();
+
+  const removable = all.filter((w) => !w.isMain);
+
+  if (removable.length === 0) {
+    logInfo('No worktrees to remove.');
+    outro('Done.');
+    return;
+  }
+
+  const selected = await promptSelectWorktreeForRemove(removable);
+
+  const s2 = spinner();
+  s2.start(`Removing worktree "${selected.branch}"...`);
+  await removeWorktree(selected.path);
+  s2.stop('Worktree removed.');
+
+  outro(`Removed: ${selected.path}`);
+}
+
+// ── Post-create helper ────────────────────────────────────────────────────────
+
+/**
+ * After a worktree is created:
+ *   1. Create configured symlinks from the main worktree
+ *   2. Run ~/.geet/init/<repo-name>.sh if it exists and is executable
+ *   3. Copy the new path to the clipboard
+ *   4. Spawn an interactive shell in the new directory
+ */
+async function postWorktreeCreate(dir) {
+  const worktrees = await listWorktrees();
+  const mainWorktree = worktrees.find((w) => w.isMain);
+
+  if (mainWorktree && SYMLINK_PATHS.length > 0) {
+    await createSymlinks(mainWorktree.path, dir, SYMLINK_PATHS);
+  }
+
+  if (mainWorktree) {
+    await runInitScript(mainWorktree.path, dir);
+  }
+
+  const { default: clipboard } = await import('clipboardy');
+  await clipboard.write(dir);
+  logSuccess(`Path copied to clipboard: ${dir}`);
+
+  outro(`Spawning shell in: ${dir}`);
+  spawnShellIn(dir);
+}
+
+/**
+ * Looks for ~/.geet/init/<repo-name>.sh and runs it in the new worktree dir
+ * if it exists and is executable.
+ *
+ * @param {string} mainWorktreePath  — path to the main worktree (repo root)
+ * @param {string} newWorktreeDir    — path to the newly created worktree
+ */
+async function runInitScript(mainWorktreePath, newWorktreeDir) {
+  const repoName = path.basename(mainWorktreePath);
+  const scriptPath = path.join(os.homedir(), '.geet', 'init', `${repoName}.sh`);
+
+  try {
+    await access(scriptPath, constants.X_OK);
+  } catch {
+    return; // script doesn't exist or isn't executable — skip silently
+  }
+
+  logInfo(`Running init script: ${scriptPath}`);
+  try {
+    await execa(scriptPath, [], { cwd: newWorktreeDir, stdio: 'inherit' });
+    logSuccess('Init script completed.');
+  } catch (err) {
+    logError(`Init script failed: ${err.message}`);
+  }
+}
+
+/**
+ * Creates soft symlinks for each relative path from sourceRoot into targetRoot.
+ * Skips paths that already exist at the destination.
+ */
+async function createSymlinks(sourceRoot, targetRoot, relativePaths) {
+  for (const relPath of relativePaths) {
+    const src = path.join(sourceRoot, relPath);
+    const dest = path.join(targetRoot, relPath);
+
+    await mkdir(path.dirname(dest), { recursive: true });
+
+    try {
+      await symlink(src, dest);
+      logSuccess(`Symlinked: ${relPath}`);
+    } catch (err) {
+      if (err.code === 'EEXIST') {
+        logWarn(`Skipped (already exists): ${relPath}`);
+      } else {
+        logError(`Failed to symlink ${relPath}: ${err.message}`);
+      }
+    }
+  }
+}
+
+/**
+ * Spawns an interactive shell session in the given directory.
+ */
+function spawnShellIn(dir) {
+  const shell = process.env.SHELL || '/bin/zsh';
+  const child = spawn(shell, [], {
+    cwd: dir,
+    stdio: 'inherit',
+    detached: false,
+  });
+
+  child.on('error', (err) => {
+    logError(`Failed to spawn shell: ${err.message}`);
+    process.exit(1);
+  });
+
+  child.on('close', (code) => {
+    process.exit(code ?? 0);
+  });
+}
