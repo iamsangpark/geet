@@ -308,7 +308,7 @@ export async function promptInitScriptSource() {
     message: 'Path to an existing script to copy/move (leave empty to generate a stub):',
     placeholder: '~/scripts/my-init.sh',
   });
-  return guardCancel(src);
+  return guardCancel(src) ?? '';
 }
 
 /**
@@ -320,6 +320,7 @@ export async function promptOverrideOrSkip() {
   const action = await p.select({
     message: 'An init script already exists for this repo. What should we do?',
     options: [
+      { value: 'edit', label: 'Edit', hint: 'open the existing script in $EDITOR' },
       { value: 'override', label: 'Override', hint: 'replace the existing script' },
       { value: 'skip', label: 'Skip', hint: 'leave the existing script unchanged' },
     ],

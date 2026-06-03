@@ -199,6 +199,11 @@ export async function configInitScriptAction() {
       outro('Skipped — existing script left unchanged.');
       return;
     }
+    if (action === 'edit') {
+      await openInEditor(targetPath);
+      outro(`Init script ready: ${targetPath}`);
+      return;
+    }
   }
 
   // ── Ensure target directory exists
@@ -270,10 +275,11 @@ export async function configInitScriptAction() {
  */
 function openInEditor(filePath) {
   return new Promise((resolve, reject) => {
-    const editor = process.env.EDITOR || 'vi';
-    logInfo(`Opening in $EDITOR (${editor})...`);
+    const editorEnv = process.env.EDITOR || 'vi';
+    const [editor, ...editorArgs] = editorEnv.split(/\s+/);
+    logInfo(`Opening in $EDITOR (${editorEnv})...`);
 
-    const child = spawn(editor, [filePath], {
+    const child = spawn(editor, [...editorArgs, filePath], {
       stdio: 'inherit',
       detached: false,
     });
