@@ -124,7 +124,7 @@ export async function worktreeRemoveAction(_options) {
 /**
  * After a worktree is created:
  *   1. Create configured symlinks from the main worktree
- *   2. Run ~/.geet/init/<repo-name>.sh if it exists and is executable
+ *   2. Run ~/.geet/init/default.sh (if executable), then ~/.geet/init/<repo-name>.sh (if executable)
  *   3. Copy the new path to the clipboard
  *   4. Spawn an interactive shell in the new directory
  */
@@ -149,16 +149,9 @@ async function postWorktreeCreate(dir) {
 }
 
 /**
- * Looks for ~/.geet/init/<repo-name>.sh and runs it in the new worktree dir
- * if it exists and is executable.
- *
- * @param {string} mainWorktreePath  — path to the main worktree (repo root)
- * @param {string} newWorktreeDir    — path to the newly created worktree
+ * Runs a single init script if it exists and is executable.
  */
-async function runInitScript(mainWorktreePath, newWorktreeDir) {
-  const repoName = path.basename(mainWorktreePath);
-  const scriptPath = path.join(os.homedir(), '.geet', 'init', `${repoName}.sh`);
-
+async function runScript(scriptPath, newWorktreeDir) {
   try {
     await access(scriptPath, constants.X_OK);
   } catch {
@@ -172,6 +165,21 @@ async function runInitScript(mainWorktreePath, newWorktreeDir) {
   } catch (err) {
     logError(`Init script failed: ${err.message}`);
   }
+}
+
+/**
+ * Runs ~/.geet/init/default.sh (if present) then ~/.geet/init/<repo-name>.sh
+ * (if present) in the newly created worktree directory.
+ *
+ * @param {string} mainWorktreePath  — path to the main worktree (repo root)
+ * @param {string} newWorktreeDir    — path to the newly created worktree
+ */
+async function runInitScript(mainWorktreePath, newWorktreeDir) {
+  const initDir = path.join(os.homedir(), '.geet', 'init');
+  await runScript(path.join(initDir, 'default.sh'), newWorktreeDir);
+
+  const repoName = path.basename(mainWorktreePath);
+  await runScript(path.join(initDir, `${repoName}.sh`), newWorktreeDir);
 }
 
 /**

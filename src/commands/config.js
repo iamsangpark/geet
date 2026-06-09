@@ -1,10 +1,11 @@
 /**
  * commands/config.js
  * Implements:
- *   geet config global       — interactively create/update ~/.geet/config
- *   geet config local        — create/update .env or .env.local in the cwd
- *   geet config set          — update a single key in a chosen file
- *   geet config init-script  — scaffold the worktree init script for this repo
+ *   geet config global               — interactively create/update ~/.geet/config
+ *   geet config local                — create/update .env or .env.local in the cwd
+ *   geet config set                  — update a single key in a chosen file
+ *   geet config init-script          — scaffold the worktree init script for this repo
+ *   geet config default-init-script  — scaffold ~/.geet/init/default.sh (runs for all repos)
  */
 
 import path from 'path';
@@ -141,9 +142,9 @@ export async function configSetAction() {
   outro(`${key}=${newValue.trim()} → ${filePath}`);
 }
 
-// ── config init-script ────────────────────────────────────────────────────────
+// ── config init-script / config default-init-script ──────────────────────────
 
-const STUB_CONTENT = `#!/usr/bin/env bash
+const REPO_STUB_CONTENT = `#!/usr/bin/env bash
 set -euo pipefail
 
 # Runs in the new worktree directory after \`geet worktree add\` / \`geet wt smart-add\`.
@@ -154,37 +155,27 @@ set -euo pipefail
 #   cp ../.env.local .env.local
 `;
 
+const DEFAULT_STUB_CONTENT = `#!/usr/bin/env bash
+set -euo pipefail
+
+# Default init script — runs for every repo before any repo-specific init script.
+# The current directory is the newly-created worktree.
+#
+# Examples:
+#   echo "Worktree created at: $PWD"
+#   git config core.hooksPath ~/.githooks
+`;
+
 const INIT_DIR = path.join(os.homedir(), '.geet', 'init');
 
 /**
- * Scaffold (or replace) the worktree init script for the current repo.
- * The repo name is derived from the main worktree path, matching the lookup
- * in worktree.js → runInitScript().
+ * Shared scaffolding logic for init scripts.
+ * Creates, copies, or edits the script at targetPath using stubContent as the
+ * template when no source file is provided.
  */
-export async function configInitScriptAction() {
-  intro('geet config init-script');
-
-  // ── Resolve repo name from the main worktree (same logic as worktree.js:158-160)
-  const s = spinner();
-  s.start('Detecting repo name from worktrees...');
-  let repoName;
-  try {
-    const worktrees = await listWorktrees();
-    const main = worktrees.find((w) => w.isMain);
-    if (!main) throw new Error('Could not find main worktree.');
-    repoName = path.basename(main.path);
-  } catch (err) {
-    s.stop('');
-    const error = new Error(`Failed to detect repo name: ${err.message}`);
-    error.gitMessage = error.message;
-    throw error;
-  }
-  s.stop(`Repo: ${repoName}`);
-
-  const targetPath = path.join(INIT_DIR, `${repoName}.sh`);
+async function scaffoldInitScript(targetPath, stubContent) {
   logInfo(`Target: ${targetPath}`);
 
-  // ── Check if script already exists
   let exists = false;
   try {
     await access(targetPath, constants.F_OK);
@@ -206,15 +197,12 @@ export async function configInitScriptAction() {
     }
   }
 
-  // ── Ensure target directory exists
   await mkdir(INIT_DIR, { recursive: true });
 
-  // ── Prompt for optional source file
   const srcInput = await promptInitScriptSource();
   const srcPath = srcInput.trim();
 
   if (srcPath) {
-    // User supplied a source file — validate it exists
     try {
       await access(srcPath, constants.F_OK);
     } catch {
@@ -230,8 +218,6 @@ export async function configInitScriptAction() {
     if (operation === 'copy') {
       await copyFile(srcPath, targetPath);
     } else {
-      // rename works across filesystems when source and dest differ, but falls
-      // back gracefully via copy+delete if needed
       try {
         await rename(srcPath, targetPath);
       } catch (renameErr) {
@@ -247,22 +233,53 @@ export async function configInitScriptAction() {
     s2.stop('Done.');
     logSuccess(`Script ${operation === 'copy' ? 'copied' : 'moved'} to ${targetPath}`);
   } else {
-    // No source — write a stub template
     const s2 = spinner();
     s2.start('Writing stub script...');
-    await writeFile(targetPath, STUB_CONTENT, 'utf8');
+    await writeFile(targetPath, stubContent, 'utf8');
     s2.stop('Stub written.');
     logSuccess(`Stub created at ${targetPath}`);
   }
 
-  // ── Make executable (matches the X_OK check in worktree.js:163)
   await chmod(targetPath, 0o755);
   logInfo('Script marked executable (chmod +x).');
 
-  // ── Open in $EDITOR for review/editing
   await openInEditor(targetPath);
 
   outro(`Init script ready: ${targetPath}`);
+}
+
+/**
+ * Scaffold (or replace) the worktree init script for the current repo.
+ */
+export async function configInitScriptAction() {
+  intro('geet config init-script');
+
+  const s = spinner();
+  s.start('Detecting repo name from worktrees...');
+  let repoName;
+  try {
+    const worktrees = await listWorktrees();
+    const main = worktrees.find((w) => w.isMain);
+    if (!main) throw new Error('Could not find main worktree.');
+    repoName = path.basename(main.path);
+  } catch (err) {
+    s.stop('');
+    const error = new Error(`Failed to detect repo name: ${err.message}`);
+    error.gitMessage = error.message;
+    throw error;
+  }
+  s.stop(`Repo: ${repoName}`);
+
+  await scaffoldInitScript(path.join(INIT_DIR, `${repoName}.sh`), REPO_STUB_CONTENT);
+}
+
+/**
+ * Scaffold (or replace) the default init script (~/.geet/init/default.sh).
+ * Runs before any repo-specific init script on every worktree creation.
+ */
+export async function configDefaultInitScriptAction() {
+  intro('geet config default-init-script');
+  await scaffoldInitScript(path.join(INIT_DIR, 'default.sh'), DEFAULT_STUB_CONTENT);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
