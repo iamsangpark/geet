@@ -140,7 +140,8 @@ stashCmd
 const worktreeCmd = program
   .command('worktree')
   .alias('wt')
-  .description('Manage git worktrees  (subcommands: add, smart-add, list, remove)');
+  .description('Manage git worktrees  (subcommands: add, smart-add, list, remove)')
+  .action(worktreeListAction);
 
 worktreeCmd
   .command('add <branch> <dir>')
