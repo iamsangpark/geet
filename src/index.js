@@ -35,7 +35,6 @@ import { checkoutAction } from './commands/checkout.js';
 import { stashAction, stashPopAction, stashListPopAction } from './commands/stash.js';
 import {
   worktreeAddAction,
-  worktreeSmartAddAction,
   worktreeListAction,
   worktreeRemoveAction,
 } from './commands/worktree.js';
@@ -64,7 +63,7 @@ completion.on('stash', ({ reply }) => {
 
 // Subcommand completions for `ga worktree <sub>`
 completion.on('worktree', ({ reply }) => {
-  reply(['add', 'smart-add', 'list', 'remove']);
+  reply(['add', 'list', 'remove']);
 });
 
 // Subcommand completions for `geet config <sub>`
@@ -141,18 +140,14 @@ stashCmd
 const worktreeCmd = program
   .command('worktree')
   .alias('wt')
-  .description('Manage git worktrees  (subcommands: add, smart-add, list, remove)')
+  .description('Manage git worktrees  (subcommands: add, list, remove)')
   .action(worktreeListAction);
 
 worktreeCmd
-  .command('add <branch> <dir>')
-  .description('Add a worktree at <dir> for <branch>')
+  .command('add [branch] [dir]')
+  .description('Add a worktree; use -i for interactive mode (formats path automatically)')
+  .option('-i, --interactive', 'Interactively create a worktree with a formatted path (~/worktrees/project/jira-desc)')
   .action(worktreeAddAction);
-
-worktreeCmd
-  .command('smart-add')
-  .description('Interactively create a worktree with a formatted path (~/worktrees/project/jira-desc)')
-  .action(worktreeSmartAddAction);
 
 worktreeCmd
   .command('list')

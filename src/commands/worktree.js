@@ -2,7 +2,7 @@
  * commands/worktree.js
  * Implements:
  *   geet worktree add <branch> <dir>   — direct worktree add
- *   geet worktree smart-add            — interactive, formats path automatically
+ *   geet worktree add -i               — interactive, formats path automatically
  *   geet worktree list                 — pick a worktree; copies path + opens shell
  *   geet worktree remove               — interactive; delete a selected worktree
  */
@@ -29,10 +29,21 @@ import {
   promptBranchName,
 } from '../prompts.js';
 
-// ── worktree add <branch> <dir> ───────────────────────────────────────────────
+// ── worktree add [branch] [dir] ───────────────────────────────────────────────
 
-export async function worktreeAddAction(branch, dir, _options) {
+export async function worktreeAddAction(branch, dir, options) {
   intro('geet wt add');
+
+  if (options.interactive) {
+    const { projectName, jiraName, description } = await promptWorktreeSmartAdd();
+
+    const folderName = `${jiraName}-${description}`;
+    dir = path.join(WORKTREE_BASE, projectName, folderName);
+    branch = `${BRANCH_PREFIX}${folderName}`;
+
+    logInfo(`Worktree path: ${dir}`);
+    logInfo(`Branch:        ${branch}`);
+  }
 
   const resolvedDir = path.resolve(dir);
   const s = spinner();
@@ -41,28 +52,6 @@ export async function worktreeAddAction(branch, dir, _options) {
   s.stop('Worktree created.');
 
   await postWorktreeCreate(resolvedDir);
-}
-
-// ── worktree smart-add ────────────────────────────────────────────────────────
-
-export async function worktreeSmartAddAction(_options) {
-  intro('geet wt smart-add');
-
-  const { projectName, jiraName, description } = await promptWorktreeSmartAdd();
-
-  const folderName = `${jiraName}-${description}`;
-  const dir = path.join(WORKTREE_BASE, projectName, folderName);
-  const branch = `${BRANCH_PREFIX}${folderName}`;
-
-  logInfo(`Worktree path: ${dir}`);
-  logInfo(`Branch:        ${branch}`);
-
-  const s = spinner();
-  s.start('Creating worktree...');
-  await addWorktree(branch, dir);
-  s.stop('Worktree created.');
-
-  await postWorktreeCreate(dir);
 }
 
 // ── worktree list ─────────────────────────────────────────────────────────────
