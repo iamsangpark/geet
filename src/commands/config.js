@@ -5,7 +5,7 @@
  *   geet config local                — create/update .env or .env.local in the cwd
  *   geet config set                  — update a single key in a chosen file
  *   geet config init-script          — scaffold the worktree init script for this repo
- *   geet config default-init-script  — scaffold ~/.geet/init/default.sh (runs for all repos)
+ *   geet config init-script --default — scaffold ~/.geet/init/default.sh (runs for all repos)
  */
 
 import path from 'path';
@@ -142,7 +142,7 @@ export async function configSetAction() {
   outro(`${key}=${newValue.trim()} → ${filePath}`);
 }
 
-// ── config init-script / config default-init-script ──────────────────────────
+// ── config init-script ────────────────────────────────────────────────────────
 
 const REPO_STUB_CONTENT = `#!/usr/bin/env bash
 set -euo pipefail
@@ -249,9 +249,16 @@ async function scaffoldInitScript(targetPath, stubContent) {
 }
 
 /**
- * Scaffold (or replace) the worktree init script for the current repo.
+ * Scaffold (or replace) the worktree init script for the current repo,
+ * or the default init script when --default/-d is passed.
  */
-export async function configInitScriptAction() {
+export async function configInitScriptAction(options) {
+  if (options.default) {
+    intro('geet config init-script --default');
+    await scaffoldInitScript(path.join(INIT_DIR, 'default.sh'), DEFAULT_STUB_CONTENT);
+    return;
+  }
+
   intro('geet config init-script');
 
   const s = spinner();
@@ -271,15 +278,6 @@ export async function configInitScriptAction() {
   s.stop(`Repo: ${repoName}`);
 
   await scaffoldInitScript(path.join(INIT_DIR, `${repoName}.sh`), REPO_STUB_CONTENT);
-}
-
-/**
- * Scaffold (or replace) the default init script (~/.geet/init/default.sh).
- * Runs before any repo-specific init script on every worktree creation.
- */
-export async function configDefaultInitScriptAction() {
-  intro('geet config default-init-script');
-  await scaffoldInitScript(path.join(INIT_DIR, 'default.sh'), DEFAULT_STUB_CONTENT);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

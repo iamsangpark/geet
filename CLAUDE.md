@@ -45,4 +45,4 @@ src/
 3. `.env.local`
 4. `process.env`
 
-After `worktree add` (including `worktree add -i`), the tool runs init scripts in order: `~/.geet/init/default.sh` (always, if executable), then `~/.geet/init/<repo-name>.sh` (repo-specific, if executable). Both are run in the new worktree directory. Use `geet config default-init-script` to scaffold `default.sh` and `geet config init-script` to scaffold the repo-specific one.
+After `worktree add` (including `worktree add -i`), the tool runs init scripts in order: `~/.geet/init/default.sh` (always, if executable), then `~/.geet/init/<repo-name>.sh` (repo-specific, if executable). Both are run in the new worktree directory. Use `geet config init-script --default` (or `-d`) to scaffold `default.sh` and `geet config init-script` to scaffold the repo-specific one.

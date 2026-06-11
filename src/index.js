@@ -44,7 +44,6 @@ import {
   configLocalAction,
   configSetAction,
   configInitScriptAction,
-  configDefaultInitScriptAction,
 } from './commands/config.js';
 
 // ── Autocompletion Setup ──────────────────────────────────────────────────────
@@ -68,7 +67,7 @@ completion.on('worktree', ({ reply }) => {
 
 // Subcommand completions for `geet config <sub>`
 completion.on('config', ({ reply }) => {
-  reply(['global', 'local', 'set', 'init-script', 'default-init-script']);
+  reply(['global', 'local', 'set', 'init-script']);
 });
 
 // omelette.init() must be called before program.parse().
@@ -164,7 +163,7 @@ worktreeCmd
 const configCmd = program
   .command('config')
   .alias('cfg')
-  .description('Manage geet config & init scripts  (subcommands: global, local, set, init-script, default-init-script)');
+  .description('Manage geet config & init scripts  (subcommands: global, local, set, init-script)');
 
 configCmd
   .command('global')
@@ -183,13 +182,9 @@ configCmd
 
 configCmd
   .command('init-script')
-  .description('Scaffold the worktree init script for this repo (~/.geet/init/<repo>.sh)')
+  .description('Scaffold the worktree init script for this repo (~/.geet/init/<repo>.sh); use -d for the default script')
+  .option('-d, --default', 'scaffold the default init script (~/.geet/init/default.sh) instead')
   .action(configInitScriptAction);
-
-configCmd
-  .command('default-init-script')
-  .description('Scaffold the default init script (~/.geet/init/default.sh) — runs before every repo-specific script')
-  .action(configDefaultInitScriptAction);
 
 // ── merge-release ─────────────────────────────────────────────────────────────
 
