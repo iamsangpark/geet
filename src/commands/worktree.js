@@ -180,6 +180,13 @@ async function createSymlinks(sourceRoot, targetRoot, relativePaths) {
     const src = path.join(sourceRoot, relPath);
     const dest = path.join(targetRoot, relPath);
 
+    try {
+      await access(src, constants.F_OK);
+    } catch {
+      logWarn(`Skipped (source does not exist): ${relPath}`);
+      continue;
+    }
+
     await mkdir(path.dirname(dest), { recursive: true });
 
     try {
