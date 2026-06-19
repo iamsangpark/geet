@@ -13,7 +13,15 @@ import os from 'os';
 import { access, copyFile, rename, chmod, mkdir, writeFile } from 'fs/promises';
 import { constants } from 'fs';
 import { spawn } from 'child_process';
-import { GLOBAL_CONFIG_PATH, CONFIG_KEYS, readEnvFile, writeEnvValues } from '../config.js';
+import {
+  GLOBAL_CONFIG_PATH,
+  GLOBAL_PROJECT_MAP_PATH,
+  CONFIG_KEYS,
+  readEnvFile,
+  writeEnvValues,
+  readProjectMap,
+  writeProjectMap,
+} from '../config.js';
 import { listWorktrees } from '../gitUtils.js';
 import {
   intro,
@@ -140,6 +148,59 @@ export async function configSetAction() {
   s2.stop('Value updated.');
 
   outro(`${key}=${newValue.trim()} → ${filePath}`);
+}
+
+// ── config project-map ────────────────────────────────────────────────────────
+
+/**
+ * Set (or clear) the project name mapping for the current repo.
+ * The mapping is stored in ~/.geet/project-map.json and used by `worktree add`
+ * to skip the project name prompt.
+ */
+export async function configProjectMapAction() {
+  intro('geet config project-map');
+
+  const s = spinner();
+  s.start('Detecting repo name...');
+  let repoName;
+  try {
+    const worktrees = await listWorktrees();
+    const main = worktrees.find((w) => w.isMain);
+    if (!main) throw new Error('Could not find main worktree.');
+    repoName = path.basename(main.path);
+  } catch (err) {
+    s.stop('');
+    const error = new Error(`Failed to detect repo name: ${err.message}`);
+    error.gitMessage = error.message;
+    throw error;
+  }
+  s.stop(`Repo: ${repoName}`);
+
+  const map = await readProjectMap();
+  const current = map[repoName] ?? '';
+
+  if (current) {
+    logInfo(`Current mapping: ${repoName} → ${current}`);
+  }
+
+  const projectName = await p.text({
+    message: `Project name for "${repoName}" (leave empty to clear):`,
+    placeholder: 'my-project',
+    initialValue: current,
+  });
+  guardCancel(projectName);
+
+  if (!projectName.trim()) {
+    delete map[repoName];
+    await writeProjectMap(map);
+    logWarn(`Cleared project mapping for "${repoName}".`);
+  } else {
+    map[repoName] = projectName.trim();
+    await writeProjectMap(map);
+    logSuccess(`Mapped: ${repoName} → ${projectName.trim()}`);
+  }
+
+  outro(`Saved: ${GLOBAL_PROJECT_MAP_PATH}`);
 }
 
 // ── config init-script ────────────────────────────────────────────────────────

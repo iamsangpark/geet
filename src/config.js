@@ -155,3 +155,34 @@ export const SYMLINK_PATHS = (process.env.GEET_SYMLINK_PATHS ?? '')
   .split(',')
   .map((p) => p.trim())
   .filter(Boolean);
+
+// ── Project map (~/.geet/project-map.json) ────────────────────────────────────
+
+/** Absolute path to the global project map file. */
+export const GLOBAL_PROJECT_MAP_PATH = path.join(os.homedir(), '.geet', 'project-map.json');
+
+/**
+ * Reads the repo → project name mapping from ~/.geet/project-map.json.
+ * Returns {} if the file does not exist.
+ *
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function readProjectMap() {
+  try {
+    const raw = await readFile(GLOBAL_PROJECT_MAP_PATH, 'utf8');
+    return JSON.parse(raw);
+  } catch (err) {
+    if (err.code === 'ENOENT') return {};
+    throw err;
+  }
+}
+
+/**
+ * Writes the full repo → project name mapping to ~/.geet/project-map.json.
+ *
+ * @param {Record<string, string>} map
+ */
+export async function writeProjectMap(map) {
+  await mkdir(path.dirname(GLOBAL_PROJECT_MAP_PATH), { recursive: true });
+  await writeFile(GLOBAL_PROJECT_MAP_PATH, JSON.stringify(map, null, 2) + '\n', 'utf8');
+}

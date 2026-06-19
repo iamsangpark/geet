@@ -13,8 +13,8 @@ import { symlink, mkdir, access } from 'fs/promises';
 import { constants } from 'fs';
 import { spawn } from 'child_process';
 import { execa } from 'execa';
-import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS } from '../config.js';
-import { addWorktree, removeWorktree, listWorktrees } from '../gitUtils.js';
+import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS, readProjectMap } from '../config.js';
+import { addWorktree, removeWorktree, listWorktrees, fetchPrune, remoteTrackingExists } from '../gitUtils.js';
 import {
   intro,
   outro,
@@ -25,19 +25,37 @@ import {
   spinner,
   promptSelectWorktree,
   promptSelectWorktreeForRemove,
+  promptMultiSelectWorktreesForPrune,
   promptWorktreeSmartAdd,
-  promptBranchName,
 } from '../prompts.js';
 
 // ── worktree add [branch] [dir] ───────────────────────────────────────────────
 
-export async function worktreeAddAction(branch, dir, options) {
+export async function worktreeAddAction(options) {
   intro('geet wt add');
 
-  if (options.interactive) {
-    const { projectName, jiraName, description } = await promptWorktreeSmartAdd();
+  let dir = options.folder;
+  let branch = options.branch;
 
-    const folderName = `${jiraName}-${description}`;
+  if (!dir || !branch) {
+    let mappedProjectName;
+    try {
+      const worktrees = await listWorktrees();
+      const main = worktrees.find((w) => w.isMain);
+      if (main) {
+        const projectMap = await readProjectMap();
+        mappedProjectName = projectMap[path.basename(main.path)];
+      }
+    } catch {
+      // project map is optional — silently skip on any error
+    }
+
+    if (mappedProjectName) {
+      logInfo(`Using project mapping: ${mappedProjectName}`);
+    }
+
+    const { projectName, jiraName, description } = await promptWorktreeSmartAdd(mappedProjectName);
+    const folderName = jiraName ? `${jiraName}-${description}` : description;
     dir = path.join(WORKTREE_BASE, projectName, folderName);
     branch = `${BRANCH_PREFIX}${folderName}`;
 
@@ -106,6 +124,51 @@ export async function worktreeRemoveAction(_options) {
   s2.stop('Worktree removed.');
 
   outro(`Removed: ${selected.path}`);
+}
+
+// ── worktree prune ────────────────────────────────────────────────────────────
+
+export async function worktreePruneAction(_options) {
+  intro('geet wt prune');
+
+  const s = spinner();
+  s.start('Fetching latest branch information from origin...');
+  await fetchPrune();
+  s.stop('Fetch complete.');
+
+  const s2 = spinner();
+  s2.start('Checking worktrees against remote...');
+  const all = await listWorktrees();
+  const removable = all.filter((w) => !w.isMain && w.branch !== '(detached HEAD)');
+
+  const stale = [];
+  for (const w of removable) {
+    const exists = await remoteTrackingExists(w.branch);
+    if (!exists) stale.push(w);
+  }
+  s2.stop();
+
+  if (stale.length === 0) {
+    logInfo('No stale worktrees found — all remote branches are still open.');
+    outro('Done.');
+    return;
+  }
+
+  const toRemove = await promptMultiSelectWorktreesForPrune(stale);
+
+  if (toRemove.length === 0) {
+    outro('Nothing removed.');
+    return;
+  }
+
+  const s3 = spinner();
+  for (const w of toRemove) {
+    s3.start(`Removing worktree "${w.branch}"...`);
+    await removeWorktree(w.path);
+    s3.stop(`Removed: ${w.branch}`);
+  }
+
+  outro(`Pruned ${toRemove.length} worktree(s).`);
 }
 
 // ── Post-create helper ────────────────────────────────────────────────────────

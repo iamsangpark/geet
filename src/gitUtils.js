@@ -76,6 +76,25 @@ export async function fetchAll() {
   return git(['fetch', '--all']);
 }
 
+/**
+ * Fetches and prunes stale remote-tracking branches.
+ */
+export async function fetchPrune() {
+  return git(['fetch', '--prune']);
+}
+
+/**
+ * Returns true if origin/<branch> still exists as a remote-tracking ref.
+ * Call after fetchPrune() so the local refs are up to date.
+ */
+export async function remoteTrackingExists(branch) {
+  const result = await execa(
+    'git', ['show-ref', '--verify', '--quiet', `refs/remotes/origin/${branch}`],
+    { reject: false },
+  );
+  return result.exitCode === 0;
+}
+
 // ── Checkout ─────────────────────────────────────────────────────────────────
 
 export async function checkoutBranch(branch) {

@@ -159,21 +159,45 @@ export async function promptSelectWorktreeForRemove(worktrees) {
 }
 
 /**
+ * Multiselect: all stale worktrees pre-selected; user can deselect any to keep.
+ * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
+ * @returns {Array<{ path: string, branch: string, commit: string, isMain: boolean }>}
+ */
+export async function promptMultiSelectWorktreesForPrune(worktrees) {
+  const selected = await p.multiselect({
+    message: 'Select worktrees to prune (space to toggle, enter to confirm):',
+    options: worktrees.map((w) => ({
+      value: w,
+      label: w.branch,
+      hint: w.path,
+    })),
+    initialValues: worktrees,
+  });
+  return guardCancel(selected);
+}
+
+/**
  * Prompts for smart-add inputs.
+ * Pass `mappedProjectName` to skip the project name prompt and use the mapping.
+ *
+ * @param {string} [mappedProjectName]
  * @returns {{ projectName: string, jiraName: string, description: string }}
  */
-export async function promptWorktreeSmartAdd() {
-  const projectName = await p.text({
-    message: 'Project name:',
-    placeholder: 'my-project',
-    validate: (v) => (!v.trim() ? 'Project name cannot be empty.' : undefined),
-  });
-  guardCancel(projectName);
+export async function promptWorktreeSmartAdd(mappedProjectName) {
+  let projectName = mappedProjectName;
+
+  if (!projectName) {
+    projectName = await p.text({
+      message: 'Project name:',
+      placeholder: 'my-project',
+      validate: (v) => (!v.trim() ? 'Project name cannot be empty.' : undefined),
+    });
+    guardCancel(projectName);
+  }
 
   const jiraName = await p.text({
-    message: 'Jira ticket name:',
+    message: 'Jira ticket (optional):',
     placeholder: 'PROJ-1234',
-    validate: (v) => (!v.trim() ? 'Jira name cannot be empty.' : undefined),
   });
   guardCancel(jiraName);
 
@@ -184,7 +208,7 @@ export async function promptWorktreeSmartAdd() {
   });
   guardCancel(description);
 
-  return { projectName, jiraName, description };
+  return { projectName, jiraName: jiraName?.trim() ?? '', description };
 }
 
 // ── Config Prompts ────────────────────────────────────────────────────────────

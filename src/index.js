@@ -37,6 +37,7 @@ import {
   worktreeAddAction,
   worktreeListAction,
   worktreeRemoveAction,
+  worktreePruneAction,
 } from './commands/worktree.js';
 import { mergeReleaseAction } from './commands/mergeRelease.js';
 import {
@@ -44,6 +45,7 @@ import {
   configLocalAction,
   configSetAction,
   configInitScriptAction,
+  configProjectMapAction,
 } from './commands/config.js';
 
 // ── Autocompletion Setup ──────────────────────────────────────────────────────
@@ -62,12 +64,12 @@ completion.on('stash', ({ reply }) => {
 
 // Subcommand completions for `ga worktree <sub>`
 completion.on('worktree', ({ reply }) => {
-  reply(['add', 'list', 'remove']);
+  reply(['add', 'list', 'remove', 'prune']);
 });
 
 // Subcommand completions for `geet config <sub>`
 completion.on('config', ({ reply }) => {
-  reply(['global', 'local', 'set', 'init-script']);
+  reply(['global', 'local', 'set', 'init-script', 'project-map']);
 });
 
 // omelette.init() must be called before program.parse().
@@ -139,13 +141,21 @@ stashCmd
 const worktreeCmd = program
   .command('worktree')
   .alias('wt')
-  .description('Manage git worktrees  (subcommands: add, list, remove)')
-  .action(worktreeListAction);
+  .description('Manage git worktrees  (subcommands: add, list, remove, prune)')
+  .action((options, cmd) => {
+    if (cmd.args.length > 0) {
+      const err = new Error();
+      err.gitMessage = `Unknown subcommand: "${cmd.args[0]}". Run "geet worktree --help" to see available subcommands.`;
+      throw err;
+    }
+    return worktreeListAction(options);
+  });
 
 worktreeCmd
-  .command('add [branch] [dir]')
-  .description('Add a worktree; use -i for interactive mode (formats path automatically)')
-  .option('-i, --interactive', 'Interactively create a worktree with a formatted path (~/worktrees/project/jira-desc)')
+  .command('add')
+  .description('Interactively add a worktree (use -f and -b together to skip prompts)')
+  .option('-f, --folder <dir>', 'Target directory for the new worktree')
+  .option('-b, --branch <branch>', 'Branch name for the new worktree')
   .action(worktreeAddAction);
 
 worktreeCmd
@@ -158,12 +168,17 @@ worktreeCmd
   .description('Interactively select a worktree to remove')
   .action(worktreeRemoveAction);
 
+worktreeCmd
+  .command('prune')
+  .description('Fetch from origin and remove worktrees whose remote branches are closed')
+  .action(worktreePruneAction);
+
 // ── config ────────────────────────────────────────────────────────────────────
 
 const configCmd = program
   .command('config')
   .alias('cfg')
-  .description('Manage geet config & init scripts  (subcommands: global, local, set, init-script)');
+  .description('Manage geet config & init scripts  (subcommands: global, local, set, init-script, project-map)');
 
 configCmd
   .command('global')
@@ -185,6 +200,11 @@ configCmd
   .description('Scaffold the worktree init script for this repo (~/.geet/init/<repo>.sh); use -d for the default script')
   .option('-d, --default', 'scaffold the default init script (~/.geet/init/default.sh) instead')
   .action(configInitScriptAction);
+
+configCmd
+  .command('project-map')
+  .description('Set the project name for this repo — used by "worktree add" to skip the project name prompt')
+  .action(configProjectMapAction);
 
 // ── merge-release ─────────────────────────────────────────────────────────────
 
