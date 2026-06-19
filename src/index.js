@@ -156,6 +156,7 @@ worktreeCmd
   .description('Interactively add a worktree (use -f and -b together to skip prompts)')
   .option('-f, --folder <dir>', 'Target directory for the new worktree')
   .option('-b, --branch <branch>', 'Branch name for the new worktree')
+  .option('-e, --existing', 'Check out an existing local branch instead of creating a new one')
   .action(worktreeAddAction);
 
 worktreeCmd

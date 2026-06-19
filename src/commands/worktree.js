@@ -14,7 +14,7 @@ import { constants } from 'fs';
 import { spawn } from 'child_process';
 import { execa } from 'execa';
 import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS, readProjectMap } from '../config.js';
-import { addWorktree, removeWorktree, listWorktrees, fetchPrune, remoteTrackingExists } from '../gitUtils.js';
+import { addWorktree, removeWorktree, listWorktrees, listLocalBranches, fetchPrune, remoteTrackingExists } from '../gitUtils.js';
 import {
   intro,
   outro,
@@ -27,6 +27,8 @@ import {
   promptSelectWorktreeForRemove,
   promptMultiSelectWorktreesForPrune,
   promptWorktreeSmartAdd,
+  promptWorktreeProjectName,
+  promptSelectExistingBranch,
 } from '../prompts.js';
 
 // ── worktree add [branch] [dir] ───────────────────────────────────────────────
@@ -54,10 +56,31 @@ export async function worktreeAddAction(options) {
       logInfo(`Using project mapping: ${mappedProjectName}`);
     }
 
-    const { projectName, jiraName, description } = await promptWorktreeSmartAdd(mappedProjectName);
-    const folderName = jiraName ? `${jiraName}-${description}` : description;
-    dir = path.join(WORKTREE_BASE, projectName, folderName);
-    branch = `${BRANCH_PREFIX}${folderName}`;
+    if (options.existing) {
+      const s = spinner();
+      s.start('Loading local branches...');
+      const branches = await listLocalBranches();
+      s.stop();
+
+      if (branches.length === 0) {
+        const err = new Error();
+        err.gitMessage = 'No local branches available (all are already checked out in a worktree).';
+        throw err;
+      }
+
+      branch = await promptSelectExistingBranch(branches);
+
+      const { projectName } = await promptWorktreeProjectName(mappedProjectName);
+      const folderName = branch.startsWith(BRANCH_PREFIX)
+        ? branch.slice(BRANCH_PREFIX.length)
+        : branch;
+      dir = path.join(WORKTREE_BASE, projectName, folderName);
+    } else {
+      const { projectName, jiraName, description } = await promptWorktreeSmartAdd(mappedProjectName);
+      const folderName = jiraName ? `${jiraName}-${description}` : description;
+      dir = path.join(WORKTREE_BASE, projectName, folderName);
+      branch = `${BRANCH_PREFIX}${folderName}`;
+    }
 
     logInfo(`Worktree path: ${dir}`);
     logInfo(`Branch:        ${branch}`);

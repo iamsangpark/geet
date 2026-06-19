@@ -183,6 +183,19 @@ export async function promptMultiSelectWorktreesForPrune(worktrees) {
  * @param {string} [mappedProjectName]
  * @returns {{ projectName: string, jiraName: string, description: string }}
  */
+export async function promptWorktreeProjectName(mappedProjectName) {
+  let projectName = mappedProjectName;
+  if (!projectName) {
+    projectName = await p.text({
+      message: 'Project name:',
+      placeholder: 'my-project',
+      validate: (v) => (!v.trim() ? 'Project name cannot be empty.' : undefined),
+    });
+    guardCancel(projectName);
+  }
+  return { projectName };
+}
+
 export async function promptWorktreeSmartAdd(mappedProjectName) {
   let projectName = mappedProjectName;
 
@@ -209,6 +222,19 @@ export async function promptWorktreeSmartAdd(mappedProjectName) {
   guardCancel(description);
 
   return { projectName, jiraName: jiraName?.trim() ?? '', description };
+}
+
+/**
+ * Presents a select list of existing local branches not already in a worktree.
+ * @param {string[]} branches
+ * @returns {string} selected branch name
+ */
+export async function promptSelectExistingBranch(branches) {
+  const branch = await p.select({
+    message: 'Select existing branch:',
+    options: branches.map((b) => ({ value: b, label: b })),
+  });
+  return guardCancel(branch);
 }
 
 // ── Config Prompts ────────────────────────────────────────────────────────────
