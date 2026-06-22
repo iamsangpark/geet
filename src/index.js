@@ -38,6 +38,7 @@ import {
   worktreeListAction,
   worktreeRemoveAction,
   worktreePruneAction,
+  worktreeCopyPathAction,
 } from './commands/worktree.js';
 import { mergeReleaseAction } from './commands/mergeRelease.js';
 import {
@@ -64,7 +65,7 @@ completion.on('stash', ({ reply }) => {
 
 // Subcommand completions for `ga worktree <sub>`
 completion.on('worktree', ({ reply }) => {
-  reply(['add', 'list', 'remove', 'prune']);
+  reply(['add', 'list', 'remove', 'prune', 'copy-path']);
 });
 
 // Subcommand completions for `geet config <sub>`
@@ -141,7 +142,7 @@ stashCmd
 const worktreeCmd = program
   .command('worktree')
   .alias('wt')
-  .description('Manage git worktrees  (subcommands: add, list, remove, prune)')
+  .description('Manage git worktrees  (subcommands: add, list, remove, prune, copy-path)')
   .action((options, cmd) => {
     if (cmd.args.length > 0) {
       const err = new Error();
@@ -173,6 +174,11 @@ worktreeCmd
   .command('prune')
   .description('Fetch from origin and remove worktrees whose remote branches are closed')
   .action(worktreePruneAction);
+
+worktreeCmd
+  .command('copy-path')
+  .description('Copy the current worktree folder path to clipboard')
+  .action(worktreeCopyPathAction);
 
 // ── config ────────────────────────────────────────────────────────────────────
 

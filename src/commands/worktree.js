@@ -121,6 +121,28 @@ export async function worktreeListAction(_options) {
   spawnShellIn(selected.path);
 }
 
+// ── worktree copy-path ────────────────────────────────────────────────────────
+
+export async function worktreeCopyPathAction(_options) {
+  intro('geet wt copy-path');
+
+  const worktrees = await listWorktrees();
+  const cwd = process.cwd();
+  const current = worktrees.find((w) => cwd === w.path || cwd.startsWith(w.path + path.sep));
+
+  if (!current) {
+    const err = new Error();
+    err.gitMessage = 'Could not determine the current worktree path.';
+    throw err;
+  }
+
+  const { default: clipboard } = await import('clipboardy');
+  await clipboard.write(current.path);
+  logSuccess(`Copied to clipboard: ${current.path}`);
+
+  outro('Done.');
+}
+
 // ── worktree remove ───────────────────────────────────────────────────────────
 
 export async function worktreeRemoveAction(_options) {
