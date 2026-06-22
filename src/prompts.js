@@ -135,7 +135,6 @@ export async function promptSelectWorktree(worktrees) {
     options: worktrees.map((w) => ({
       value: w,
       label: w.branch,
-      hint: w.path,
     })),
   });
   return guardCancel(selected);
