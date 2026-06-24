@@ -76,7 +76,8 @@ export async function worktreeAddAction(options) {
         : branch;
       dir = path.join(WORKTREE_BASE, projectName, folderName);
     } else {
-      const { projectName, jiraName, description } = await promptWorktreeSmartAdd(mappedProjectName);
+      const { projectName, jiraName, description: rawDescription } = await promptWorktreeSmartAdd(mappedProjectName);
+      const description = rawDescription.replace(/ /g, '_');
       const folderName = jiraName ? `${jiraName}-${description}` : description;
       dir = path.join(WORKTREE_BASE, projectName, folderName);
       branch = `${BRANCH_PREFIX}${folderName}`;
