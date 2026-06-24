@@ -9,7 +9,7 @@
 
 import path from 'path';
 import os from 'os';
-import { symlink, mkdir, access } from 'fs/promises';
+import { symlink, mkdir, access, unlink } from 'fs/promises';
 import { constants } from 'fs';
 import { spawn } from 'child_process';
 import { execa } from 'execa';
@@ -26,6 +26,7 @@ import {
   promptSelectWorktree,
   promptSelectWorktreeForRemove,
   promptSelectWorktreeForRename,
+  promptSelectWorktreeForLinkFix,
   promptMultiSelectWorktreesForPrune,
   promptWorktreeSmartAdd,
   promptWorktreeProjectName,
@@ -287,6 +288,43 @@ export async function worktreeRenameAction(_options) {
   outro(`Renamed: ${newDir}`);
 }
 
+// ── worktree link-fix ─────────────────────────────────────────────────────────
+
+export async function worktreeLinkFixAction(_options) {
+  intro('geet wt link-fix');
+
+  if (SYMLINK_PATHS.length === 0) {
+    logInfo('No symlink paths configured (GEET_SYMLINK_PATHS is empty).');
+    outro('Done.');
+    return;
+  }
+
+  const s = spinner();
+  s.start('Listing worktrees...');
+  const all = await listWorktrees();
+  s.stop();
+
+  const mainWorktree = all.find((w) => w.isMain);
+  if (!mainWorktree) {
+    const err = new Error();
+    err.gitMessage = 'Could not determine the main worktree.';
+    throw err;
+  }
+
+  const nonMain = all.filter((w) => !w.isMain);
+  if (nonMain.length === 0) {
+    logInfo('No other worktrees found.');
+    outro('Done.');
+    return;
+  }
+
+  const selected = await promptSelectWorktreeForLinkFix(nonMain);
+
+  await relinkSymlinks(mainWorktree.path, selected.path, SYMLINK_PATHS);
+
+  outro(`Re-linked symlinks in: ${selected.path}`);
+}
+
 // ── Post-create helper ────────────────────────────────────────────────────────
 
 /**
@@ -348,6 +386,42 @@ async function runInitScript(mainWorktreePath, newWorktreeDir) {
 
   const repoName = path.basename(mainWorktreePath);
   await runScript(path.join(initDir, `${repoName}.sh`), newWorktreeDir);
+}
+
+/**
+ * Removes existing entries and creates fresh symlinks for each relative path
+ * from sourceRoot into targetRoot.
+ */
+async function relinkSymlinks(sourceRoot, targetRoot, relativePaths) {
+  for (const relPath of relativePaths) {
+    const src = path.join(sourceRoot, relPath);
+    const dest = path.join(targetRoot, relPath);
+
+    try {
+      await access(src, constants.F_OK);
+    } catch {
+      logWarn(`Skipped (source does not exist): ${relPath}`);
+      continue;
+    }
+
+    await mkdir(path.dirname(dest), { recursive: true });
+
+    try {
+      await unlink(dest);
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        logError(`Failed to remove existing ${relPath}: ${err.message}`);
+        continue;
+      }
+    }
+
+    try {
+      await symlink(src, dest);
+      logSuccess(`Symlinked: ${relPath}`);
+    } catch (err) {
+      logError(`Failed to symlink ${relPath}: ${err.message}`);
+    }
+  }
 }
 
 /**

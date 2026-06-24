@@ -40,6 +40,7 @@ import {
   worktreePruneAction,
   worktreeCopyPathAction,
   worktreeRenameAction,
+  worktreeLinkFixAction,
 } from './commands/worktree.js';
 import { mergeReleaseAction } from './commands/mergeRelease.js';
 import {
@@ -66,7 +67,7 @@ completion.on('stash', ({ reply }) => {
 
 // Subcommand completions for `ga worktree <sub>`
 completion.on('worktree', ({ reply }) => {
-  reply(['add', 'list', 'remove', 'prune', 'copy-path', 'rename']);
+  reply(['add', 'list', 'remove', 'prune', 'copy-path', 'rename', 'link-fix']);
 });
 
 // Subcommand completions for `geet config <sub>`
@@ -143,7 +144,7 @@ stashCmd
 const worktreeCmd = program
   .command('worktree')
   .alias('wt')
-  .description('Manage git worktrees  (subcommands: add, list, remove, prune, copy-path, rename)')
+  .description('Manage git worktrees  (subcommands: add, list, remove, prune, copy-path, rename, link-fix)')
   .action((options, cmd) => {
     if (cmd.args.length > 0) {
       const err = new Error();
@@ -185,6 +186,11 @@ worktreeCmd
   .command('rename')
   .description('Interactively rename a worktree: move its folder and rename its branch')
   .action(worktreeRenameAction);
+
+worktreeCmd
+  .command('link-fix')
+  .description('Re-link GEET_SYMLINK_PATHS from the main worktree into a selected worktree')
+  .action(worktreeLinkFixAction);
 
 // ── config ────────────────────────────────────────────────────────────────────
 

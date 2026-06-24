@@ -175,6 +175,23 @@ export async function promptSelectWorktreeForRename(worktrees) {
 }
 
 /**
+ * Displays non-main worktrees and lets the user select one to re-link.
+ * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
+ * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
+ */
+export async function promptSelectWorktreeForLinkFix(worktrees) {
+  const selected = await p.select({
+    message: 'Select a worktree to re-link:',
+    options: worktrees.map((w) => ({
+      value: w,
+      label: w.branch,
+      hint: w.path,
+    })),
+  });
+  return guardCancel(selected);
+}
+
+/**
  * Multiselect: all stale worktrees pre-selected; user can deselect any to keep.
  * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
  * @returns {Array<{ path: string, branch: string, commit: string, isMain: boolean }>}
