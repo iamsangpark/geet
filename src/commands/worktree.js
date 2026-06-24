@@ -14,7 +14,7 @@ import { constants } from 'fs';
 import { spawn } from 'child_process';
 import { execa } from 'execa';
 import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS, readProjectMap } from '../config.js';
-import { addWorktree, removeWorktree, listWorktrees, listLocalBranches, fetchPrune, remoteTrackingExists } from '../gitUtils.js';
+import { addWorktree, removeWorktree, moveWorktree, checkoutNewBranchInDir, deleteBranch, listWorktrees, listLocalBranches, fetchPrune, remoteTrackingExists } from '../gitUtils.js';
 import {
   intro,
   outro,
@@ -25,10 +25,12 @@ import {
   spinner,
   promptSelectWorktree,
   promptSelectWorktreeForRemove,
+  promptSelectWorktreeForRename,
   promptMultiSelectWorktreesForPrune,
   promptWorktreeSmartAdd,
   promptWorktreeProjectName,
   promptSelectExistingBranch,
+  promptConfirm,
 } from '../prompts.js';
 
 // ── worktree add [branch] [dir] ───────────────────────────────────────────────
@@ -215,6 +217,74 @@ export async function worktreePruneAction(_options) {
   }
 
   outro(`Pruned ${toRemove.length} worktree(s).`);
+}
+
+// ── worktree rename ───────────────────────────────────────────────────────────
+
+export async function worktreeRenameAction(_options) {
+  intro('geet wt rename');
+
+  const s = spinner();
+  s.start('Listing worktrees...');
+  const all = await listWorktrees();
+  s.stop();
+
+  const renameable = all.filter((w) => !w.isMain);
+
+  if (renameable.length === 0) {
+    logInfo('No worktrees to rename.');
+    outro('Done.');
+    return;
+  }
+
+  const selected = await promptSelectWorktreeForRename(renameable);
+
+  // Parse current path into projectName / jiraName / description for pre-filling
+  const currentFolderName = path.basename(selected.path);
+  const currentProjectName = path.basename(path.dirname(selected.path));
+  const jiraMatch = currentFolderName.match(/^([A-Z]+-\d+)-(.+)$/);
+  const currentJiraName = jiraMatch ? jiraMatch[1] : '';
+  const currentDescription = (jiraMatch ? jiraMatch[2] : currentFolderName).replace(/_/g, ' ');
+
+  const { projectName, jiraName, description: rawDescription } = await promptWorktreeSmartAdd(null, {
+    projectName: currentProjectName,
+    jiraName: currentJiraName,
+    description: currentDescription,
+  });
+
+  const description = rawDescription.replace(/ /g, '_');
+  const newFolderName = jiraName ? `${jiraName}-${description}` : description;
+  const newDir = path.resolve(path.join(WORKTREE_BASE, projectName, newFolderName));
+  const newBranch = `${BRANCH_PREFIX}${newFolderName}`;
+  const oldDir = selected.path;
+  const oldBranch = selected.branch;
+
+  logInfo(`New worktree path: ${newDir}`);
+  logInfo(`New branch:        ${newBranch}`);
+
+  if (newDir !== oldDir) {
+    const s2 = spinner();
+    s2.start(`Moving worktree to "${newDir}"...`);
+    await moveWorktree(oldDir, newDir);
+    s2.stop('Worktree moved.');
+  }
+
+  if (newBranch !== oldBranch) {
+    const s3 = spinner();
+    s3.start(`Creating branch "${newBranch}" and switching worktree...`);
+    await checkoutNewBranchInDir(newBranch, newDir);
+    s3.stop('Branch renamed.');
+
+    const shouldDelete = await promptConfirm(`Delete old branch "${oldBranch}"?`);
+    if (shouldDelete) {
+      const s4 = spinner();
+      s4.start(`Deleting branch "${oldBranch}"...`);
+      await deleteBranch(oldBranch);
+      s4.stop('Old branch deleted.');
+    }
+  }
+
+  outro(`Renamed: ${newDir}`);
 }
 
 // ── Post-create helper ────────────────────────────────────────────────────────

@@ -192,6 +192,27 @@ export async function removeWorktree(dir) {
 }
 
 /**
+ * Moves a worktree from oldPath to newPath.
+ */
+export async function moveWorktree(oldPath, newPath) {
+  return git(['worktree', 'move', oldPath, newPath]);
+}
+
+/**
+ * Creates a new branch and checks it out inside an existing worktree directory.
+ */
+export async function checkoutNewBranchInDir(branch, dir) {
+  return git(['checkout', '-b', branch], { cwd: dir });
+}
+
+/**
+ * Deletes a local branch (requires it to be fully merged, use -D to force).
+ */
+export async function deleteBranch(branch, force = false) {
+  return git(['branch', force ? '-D' : '-d', branch]);
+}
+
+/**
  * Lists all worktrees by parsing `git worktree list --porcelain`.
  * @returns {Array<{ path: string, branch: string, commit: string, isMain: boolean }>}
  */

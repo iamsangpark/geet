@@ -158,6 +158,23 @@ export async function promptSelectWorktreeForRemove(worktrees) {
 }
 
 /**
+ * Displays non-main worktrees and lets the user select one to rename.
+ * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
+ * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
+ */
+export async function promptSelectWorktreeForRename(worktrees) {
+  const selected = await p.select({
+    message: 'Select a worktree to rename:',
+    options: worktrees.map((w) => ({
+      value: w,
+      label: w.branch,
+      hint: w.path,
+    })),
+  });
+  return guardCancel(selected);
+}
+
+/**
  * Multiselect: all stale worktrees pre-selected; user can deselect any to keep.
  * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
  * @returns {Array<{ path: string, branch: string, commit: string, isMain: boolean }>}
@@ -195,13 +212,14 @@ export async function promptWorktreeProjectName(mappedProjectName) {
   return { projectName };
 }
 
-export async function promptWorktreeSmartAdd(mappedProjectName) {
+export async function promptWorktreeSmartAdd(mappedProjectName, initialValues = {}) {
   let projectName = mappedProjectName;
 
   if (!projectName) {
     projectName = await p.text({
       message: 'Project name:',
       placeholder: 'my-project',
+      initialValue: initialValues.projectName,
       validate: (v) => (!v.trim() ? 'Project name cannot be empty.' : undefined),
     });
     guardCancel(projectName);
@@ -210,12 +228,14 @@ export async function promptWorktreeSmartAdd(mappedProjectName) {
   const jiraName = await p.text({
     message: 'Jira ticket (optional):',
     placeholder: 'PROJ-1234',
+    initialValue: initialValues.jiraName,
   });
   guardCancel(jiraName);
 
   const description = await p.text({
     message: 'Short description:',
     placeholder: 'add-login-page',
+    initialValue: initialValues.description,
     validate: (v) => (!v.trim() ? 'Description cannot be empty.' : undefined),
   });
   guardCancel(description);

@@ -39,6 +39,7 @@ import {
   worktreeRemoveAction,
   worktreePruneAction,
   worktreeCopyPathAction,
+  worktreeRenameAction,
 } from './commands/worktree.js';
 import { mergeReleaseAction } from './commands/mergeRelease.js';
 import {
@@ -65,7 +66,7 @@ completion.on('stash', ({ reply }) => {
 
 // Subcommand completions for `ga worktree <sub>`
 completion.on('worktree', ({ reply }) => {
-  reply(['add', 'list', 'remove', 'prune', 'copy-path']);
+  reply(['add', 'list', 'remove', 'prune', 'copy-path', 'rename']);
 });
 
 // Subcommand completions for `geet config <sub>`
@@ -142,7 +143,7 @@ stashCmd
 const worktreeCmd = program
   .command('worktree')
   .alias('wt')
-  .description('Manage git worktrees  (subcommands: add, list, remove, prune, copy-path)')
+  .description('Manage git worktrees  (subcommands: add, list, remove, prune, copy-path, rename)')
   .action((options, cmd) => {
     if (cmd.args.length > 0) {
       const err = new Error();
@@ -179,6 +180,11 @@ worktreeCmd
   .command('copy-path')
   .description('Copy the current worktree folder path to clipboard')
   .action(worktreeCopyPathAction);
+
+worktreeCmd
+  .command('rename')
+  .description('Interactively rename a worktree: move its folder and rename its branch')
+  .action(worktreeRenameAction);
 
 // ── config ────────────────────────────────────────────────────────────────────
 
