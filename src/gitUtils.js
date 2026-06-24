@@ -167,7 +167,7 @@ export async function listStashes() {
  */
 export async function listLocalBranches() {
   const result = await git(['branch', '--format=%(refname:short)']);
-  const all = result.stdout.split('\n').map((b) => b.trim()).filter(Boolean);
+  const all = result.split('\n').map((b) => b.trim()).filter(Boolean);
   const worktrees = await listWorktrees();
   const inUse = new Set(worktrees.map((w) => w.branch));
   return all.filter((b) => !inUse.has(b));
