@@ -11,6 +11,7 @@
 import path from 'path';
 import os from 'os';
 import * as p from '@clack/prompts';
+import search from '@inquirer/search';
 import { CONFIG_KEYS, GLOBAL_CONFIG_PATH } from './config.js';
 
 // ── Cancel Guard ──────────────────────────────────────────────────────────────
@@ -43,6 +44,38 @@ export const logSuccess = (msg) => p.log.success(msg);
  *   s.stop('Done.');
  */
 export const spinner = () => p.spinner();
+
+// ── Fuzzy Search Helper ───────────────────────────────────────────────────────
+
+function fuzzyMatch(input, target) {
+  if (!input) return true;
+  const q = input.toLowerCase();
+  const t = target.toLowerCase();
+  let qi = 0;
+  for (let i = 0; i < t.length && qi < q.length; i++) {
+    if (t[i] === q[qi]) qi++;
+  }
+  return qi === q.length;
+}
+
+async function searchSelect(message, options) {
+  try {
+    const result = await search({
+      message,
+      source: (input) =>
+        options
+          .filter((o) => fuzzyMatch(input, o.searchText))
+          .map((o) => ({ name: o.label, value: o.value, description: o.hint })),
+    });
+    return result;
+  } catch (err) {
+    if (err.name === 'ExitPromptError') {
+      p.cancel('Operation cancelled.');
+      process.exit(0);
+    }
+    throw err;
+  }
+}
 
 // ── Checkout Prompts ──────────────────────────────────────────────────────────
 
@@ -130,14 +163,10 @@ export async function promptSelectStash(stashes) {
  * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
 export async function promptSelectWorktree(worktrees) {
-  const selected = await p.select({
-    message: 'Select a worktree:',
-    options: worktrees.map((w) => ({
-      value: w,
-      label: w.branch,
-    })),
-  });
-  return guardCancel(selected);
+  return searchSelect(
+    'Select a worktree:',
+    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
+  );
 }
 
 /**
@@ -146,15 +175,10 @@ export async function promptSelectWorktree(worktrees) {
  * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
 export async function promptSelectWorktreeForRemove(worktrees) {
-  const selected = await p.select({
-    message: 'Select a worktree to remove:',
-    options: worktrees.map((w) => ({
-      value: w,
-      label: w.branch,
-      hint: w.path,
-    })),
-  });
-  return guardCancel(selected);
+  return searchSelect(
+    'Select a worktree to remove:',
+    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
+  );
 }
 
 /**
@@ -163,15 +187,10 @@ export async function promptSelectWorktreeForRemove(worktrees) {
  * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
 export async function promptSelectWorktreeForRename(worktrees) {
-  const selected = await p.select({
-    message: 'Select a worktree to rename:',
-    options: worktrees.map((w) => ({
-      value: w,
-      label: w.branch,
-      hint: w.path,
-    })),
-  });
-  return guardCancel(selected);
+  return searchSelect(
+    'Select a worktree to rename:',
+    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
+  );
 }
 
 /**
@@ -180,15 +199,10 @@ export async function promptSelectWorktreeForRename(worktrees) {
  * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
 export async function promptSelectWorktreeForLinkFix(worktrees) {
-  const selected = await p.select({
-    message: 'Select a worktree to re-link:',
-    options: worktrees.map((w) => ({
-      value: w,
-      label: w.branch,
-      hint: w.path,
-    })),
-  });
-  return guardCancel(selected);
+  return searchSelect(
+    'Select a worktree to re-link:',
+    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
+  );
 }
 
 /**
@@ -266,11 +280,10 @@ export async function promptWorktreeSmartAdd(mappedProjectName, initialValues = 
  * @returns {string} selected branch name
  */
 export async function promptSelectExistingBranch(branches) {
-  const branch = await p.select({
-    message: 'Select existing branch:',
-    options: branches.map((b) => ({ value: b, label: b })),
-  });
-  return guardCancel(branch);
+  return searchSelect(
+    'Select existing branch:',
+    branches.map((b) => ({ value: b, label: b, searchText: b })),
+  );
 }
 
 // ── Config Prompts ────────────────────────────────────────────────────────────
