@@ -9,6 +9,7 @@
 
 import path from 'path';
 import os from 'os';
+import { createInterface } from 'readline';
 import { symlink, mkdir, access, unlink } from 'fs/promises';
 import { constants } from 'fs';
 import { spawn } from 'child_process';
@@ -364,6 +365,7 @@ async function postWorktreeCreate(dir) {
 
 /**
  * Runs a single init script if it exists and is executable.
+ * Streams output into a rolling 4-line window using ANSI cursor control.
  */
 async function runScript(scriptPath, newWorktreeDir) {
   try {
@@ -373,8 +375,42 @@ async function runScript(scriptPath, newWorktreeDir) {
   }
 
   logInfo(`Running init script: ${scriptPath}`);
+
+  const TAIL = 4;
+  const lines = [];
+  let windowDrawn = false;
+
+  const drawWindow = () => {
+    const cols = process.stdout.columns || 80;
+    const maxWidth = cols - 6;
+    const tail = lines.slice(-TAIL);
+
+    if (windowDrawn) {
+      process.stdout.write(`\x1b[${TAIL}A\x1b[0J`);
+    }
+
+    for (let i = 0; i < TAIL; i++) {
+      const raw = tail[i] ?? '';
+      const display = raw.length > maxWidth ? `${raw.slice(0, maxWidth - 3)}...` : raw;
+      process.stdout.write(`  \x1b[2m│\x1b[0m ${display}\n`);
+    }
+
+    windowDrawn = true;
+  };
+
+  drawWindow();
+
   try {
-    await execa(scriptPath, [], { cwd: newWorktreeDir, stdio: 'inherit' });
+    const proc = execa(scriptPath, [], { cwd: newWorktreeDir, all: true });
+    const rl = createInterface({ input: proc.all, crlfDelay: Infinity });
+
+    rl.on('line', (line) => {
+      lines.push(line);
+      drawWindow();
+    });
+
+    await Promise.all([proc, new Promise((resolve) => rl.once('close', resolve))]);
+
     logSuccess('Init script completed.');
   } catch (err) {
     logError(`Init script failed: ${err.message}`);
