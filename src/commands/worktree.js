@@ -97,7 +97,7 @@ async function worktreeCreateImpl(introText, options) {
   await addWorktree(branch, resolvedDir);
   s.stop('Worktree created.');
 
-  await postWorktreeCreate(resolvedDir);
+  await postWorktreeCreate(resolvedDir, { skipInit: !options.init });
 }
 
 export function worktreeNewAction(options) {
@@ -343,7 +343,7 @@ export async function worktreeLinkFixAction(_options) {
  *   3. Copy the new path to the clipboard
  *   4. Spawn an interactive shell in the new directory
  */
-async function postWorktreeCreate(dir) {
+async function postWorktreeCreate(dir, { skipInit = false } = {}) {
   const worktrees = await listWorktrees();
   const mainWorktree = worktrees.find((w) => w.isMain);
 
@@ -351,7 +351,7 @@ async function postWorktreeCreate(dir) {
     await createSymlinks(mainWorktree.path, dir, SYMLINK_PATHS);
   }
 
-  if (mainWorktree) {
+  if (mainWorktree && !skipInit) {
     await runInitScript(mainWorktree.path, dir);
   }
 

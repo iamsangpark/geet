@@ -160,11 +160,13 @@ worktreeCmd
   .description('Interactively create a new branch and worktree (use -f and -b together to skip prompts)')
   .option('-f, --folder <dir>', 'Target directory for the new worktree')
   .option('-b, --branch <branch>', 'Branch name for the new worktree')
+  .option('--no-init', 'Skip running init scripts after worktree creation')
   .action(worktreeNewAction);
 
 worktreeCmd
   .command('add')
   .description('Check out an existing local branch as a new worktree')
+  .option('--no-init', 'Skip running init scripts after worktree creation')
   .action(worktreeAddAction);
 
 worktreeCmd
