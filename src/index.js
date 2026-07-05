@@ -34,6 +34,7 @@ const omelette = require('omelette');
 import { checkoutAction } from './commands/checkout.js';
 import { stashAction, stashPopAction, stashListPopAction } from './commands/stash.js';
 import {
+  worktreeNewAction,
   worktreeAddAction,
   worktreeListAction,
   worktreeRemoveAction,
@@ -67,7 +68,7 @@ completion.on('stash', ({ reply }) => {
 
 // Subcommand completions for `ga worktree <sub>`
 completion.on('worktree', ({ reply }) => {
-  reply(['add', 'list', 'remove', 'prune', 'copy-path', 'rename', 'link-fix']);
+  reply(['new', 'add', 'list', 'remove', 'prune', 'copy-path', 'rename', 'link-fix']);
 });
 
 // Subcommand completions for `geet config <sub>`
@@ -144,7 +145,7 @@ stashCmd
 const worktreeCmd = program
   .command('worktree')
   .alias('wt')
-  .description('Manage git worktrees  (subcommands: add, list, remove, prune, copy-path, rename, link-fix)')
+  .description('Manage git worktrees  (subcommands: new, add, list, remove, prune, copy-path, rename, link-fix)')
   .action((options, cmd) => {
     if (cmd.args.length > 0) {
       const err = new Error();
@@ -155,11 +156,15 @@ const worktreeCmd = program
   });
 
 worktreeCmd
-  .command('add')
-  .description('Interactively add a worktree (use -f and -b together to skip prompts)')
+  .command('new')
+  .description('Interactively create a new branch and worktree (use -f and -b together to skip prompts)')
   .option('-f, --folder <dir>', 'Target directory for the new worktree')
   .option('-b, --branch <branch>', 'Branch name for the new worktree')
-  .option('-e, --existing', 'Check out an existing local branch instead of creating a new one')
+  .action(worktreeNewAction);
+
+worktreeCmd
+  .command('add')
+  .description('Check out an existing local branch as a new worktree')
   .action(worktreeAddAction);
 
 worktreeCmd
@@ -222,7 +227,7 @@ configCmd
 
 configCmd
   .command('project-map')
-  .description('Set the project name for this repo — used by "worktree add" to skip the project name prompt')
+  .description('Set the project name for this repo — used by "worktree new" to skip the project name prompt')
   .action(configProjectMapAction);
 
 // ── merge-release ─────────────────────────────────────────────────────────────

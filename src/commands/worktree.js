@@ -1,8 +1,8 @@
 /**
  * commands/worktree.js
  * Implements:
- *   geet worktree add <branch> <dir>   — direct worktree add
- *   geet worktree add -i               — interactive, formats path automatically
+ *   geet worktree new                  — create a new branch + worktree interactively
+ *   geet worktree add                  — check out an existing local branch as a worktree
  *   geet worktree list                 — pick a worktree; copies path + opens shell
  *   geet worktree remove               — interactive; delete a selected worktree
  */
@@ -34,10 +34,10 @@ import {
   promptConfirm,
 } from '../prompts.js';
 
-// ── worktree add [branch] [dir] ───────────────────────────────────────────────
+// ── worktree new / add ────────────────────────────────────────────────────────
 
-export async function worktreeAddAction(options) {
-  intro('geet wt add');
+async function worktreeCreateImpl(introText, options) {
+  intro(introText);
 
   let dir = options.folder;
   let branch = options.branch;
@@ -97,6 +97,14 @@ export async function worktreeAddAction(options) {
   s.stop('Worktree created.');
 
   await postWorktreeCreate(resolvedDir);
+}
+
+export function worktreeNewAction(options) {
+  return worktreeCreateImpl('geet wt new', options);
+}
+
+export function worktreeAddAction(options) {
+  return worktreeCreateImpl('geet wt add', { ...options, existing: true });
 }
 
 // ── worktree list ─────────────────────────────────────────────────────────────
