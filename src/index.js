@@ -128,6 +128,7 @@ const stashCmd = program
   .alias('sts')
   .description('Stash changes, prompting for a message  (subcommands: pop, list)')
   .option('-m, --message <msg>', 'Stash message (skips the prompt)')
+  .option('-k, --keep-untracked', 'Leave untracked files in the working tree (do not stash them)')
   .action(stashAction);
 
 stashCmd

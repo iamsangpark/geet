@@ -59,6 +59,9 @@ export async function stashAction(options) {
 
   const s = spinner();
   s.start(message ? `Stashing with message: "${message}"...` : 'Stashing changes...');
+  if (!options.keepUntracked) {
+    await gitAddAll();
+  }
   await stashSave(message || undefined);
   s.stop('Changes stashed.');
 
