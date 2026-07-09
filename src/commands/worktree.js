@@ -97,6 +97,10 @@ async function worktreeCreateImpl(introText, options) {
   await addWorktree(branch, resolvedDir);
   s.stop('Worktree created.');
 
+  const { default: clipboard } = await import('clipboardy');
+  await clipboard.write(resolvedDir);
+  logSuccess(`Path copied to clipboard: ${resolvedDir}`);
+
   await postWorktreeCreate(resolvedDir, { skipInit: !options.init });
 }
 
@@ -340,8 +344,7 @@ export async function worktreeLinkFixAction(_options) {
  * After a worktree is created:
  *   1. Create configured symlinks from the main worktree
  *   2. Run ~/.geet/init/default.sh (if executable), then ~/.geet/init/<repo-name>.sh (if executable)
- *   3. Copy the new path to the clipboard
- *   4. Spawn an interactive shell in the new directory
+ *   3. Spawn an interactive shell in the new directory
  */
 async function postWorktreeCreate(dir, { skipInit = false } = {}) {
   const worktrees = await listWorktrees();
@@ -354,10 +357,6 @@ async function postWorktreeCreate(dir, { skipInit = false } = {}) {
   if (mainWorktree && !skipInit) {
     await runInitScript(mainWorktree.path, dir);
   }
-
-  const { default: clipboard } = await import('clipboardy');
-  await clipboard.write(dir);
-  logSuccess(`Path copied to clipboard: ${dir}`);
 
   outro(`Spawning shell in: ${dir}`);
   spawnShellIn(dir);
