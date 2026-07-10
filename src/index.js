@@ -42,6 +42,8 @@ import {
   worktreeCopyPathAction,
   worktreeRenameAction,
   worktreeLinkFixAction,
+  worktreePullAction,
+  worktreeMergeAction,
 } from './commands/worktree.js';
 import { mergeReleaseAction } from './commands/mergeRelease.js';
 import {
@@ -68,7 +70,7 @@ completion.on('stash', ({ reply }) => {
 
 // Subcommand completions for `ga worktree <sub>`
 completion.on('worktree', ({ reply }) => {
-  reply(['new', 'add', 'list', 'remove', 'prune', 'copy-path', 'rename', 'link-fix']);
+  reply(['new', 'add', 'list', 'remove', 'prune', 'copy-path', 'rename', 'link-fix', 'pull', 'merge']);
 });
 
 // Subcommand completions for `geet config <sub>`
@@ -146,7 +148,7 @@ stashCmd
 const worktreeCmd = program
   .command('worktree')
   .alias('wt')
-  .description('Manage git worktrees  (subcommands: new, add, list, remove, prune, copy-path, rename, link-fix)')
+  .description('Manage git worktrees  (subcommands: new, add, list, remove, prune, copy-path, rename, link-fix, pull, merge)')
   .action((options, cmd) => {
     if (cmd.args.length > 0) {
       const err = new Error();
@@ -199,6 +201,17 @@ worktreeCmd
   .command('link-fix')
   .description('Re-link GEET_SYMLINK_PATHS from the main worktree into a selected worktree')
   .action(worktreeLinkFixAction);
+
+worktreeCmd
+  .command('pull')
+  .description('Interactively select a worktree and pull the latest changes for its branch')
+  .action(worktreePullAction);
+
+worktreeCmd
+  .command('merge')
+  .description('Interactively select a worktree branch to merge into the current branch')
+  .option('-p, --pull', 'Pull the target branch from origin before merging')
+  .action(worktreeMergeAction);
 
 // ── config ────────────────────────────────────────────────────────────────────
 

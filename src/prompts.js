@@ -224,6 +224,46 @@ export async function promptMultiSelectWorktreesForPrune(worktrees) {
 }
 
 /**
+ * Displays worktrees and lets the user select one to pull latest changes for.
+ * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
+ * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
+ */
+export async function promptSelectWorktreeForPull(worktrees) {
+  return searchSelect(
+    'Select a worktree to pull:',
+    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
+  );
+}
+
+/**
+ * Displays worktrees and lets the user select one to merge into the current branch.
+ * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
+ * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
+ */
+export async function promptSelectWorktreeForMerge(worktrees) {
+  return searchSelect(
+    'Select a worktree to merge into the current branch:',
+    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
+  );
+}
+
+/**
+ * Shown before `worktree merge` when there are uncommitted changes.
+ * @returns {'add-and-stash' | 'stash-first' | 'merge-anyway'}
+ */
+export async function promptUncommittedChangesForMerge() {
+  const action = await p.select({
+    message: 'You have uncommitted changes. How should we proceed?',
+    options: [
+      { value: 'add-and-stash', label: 'Add all untracked files, then stash' },
+      { value: 'stash-first', label: 'Stash tracked changes only, then merge' },
+      { value: 'merge-anyway', label: 'Merge anyway (may cause conflicts)' },
+    ],
+  });
+  return guardCancel(action);
+}
+
+/**
  * Prompts for smart-add inputs.
  * Pass `mappedProjectName` to skip the project name prompt and use the mapping.
  *

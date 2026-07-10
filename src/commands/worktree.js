@@ -15,7 +15,23 @@ import { constants } from 'fs';
 import { spawn } from 'child_process';
 import { execa } from 'execa';
 import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS, readProjectMap } from '../config.js';
-import { addWorktree, removeWorktree, moveWorktree, checkoutNewBranchInDir, deleteBranch, listWorktrees, listLocalBranches, fetchPrune, remoteTrackingExists } from '../gitUtils.js';
+import {
+  addWorktree,
+  removeWorktree,
+  moveWorktree,
+  checkoutNewBranchInDir,
+  deleteBranch,
+  listWorktrees,
+  listLocalBranches,
+  fetchPrune,
+  remoteTrackingExists,
+  getCurrentBranch,
+  getUncommittedChanges,
+  gitAddAll,
+  stashSave,
+  pullBranch,
+  mergeBranch,
+} from '../gitUtils.js';
 import {
   intro,
   outro,
@@ -28,7 +44,10 @@ import {
   promptSelectWorktreeForRemove,
   promptSelectWorktreeForRename,
   promptSelectWorktreeForLinkFix,
+  promptSelectWorktreeForPull,
+  promptSelectWorktreeForMerge,
   promptMultiSelectWorktreesForPrune,
+  promptUncommittedChangesForMerge,
   promptWorktreeSmartAdd,
   promptWorktreeProjectName,
   promptSelectExistingBranch,
@@ -336,6 +355,91 @@ export async function worktreeLinkFixAction(_options) {
   await relinkSymlinks(mainWorktree.path, selected.path, SYMLINK_PATHS);
 
   outro(`Re-linked symlinks in: ${selected.path}`);
+}
+
+// ── worktree pull ─────────────────────────────────────────────────────────────
+
+export async function worktreePullAction(_options) {
+  intro('geet wt pull');
+
+  const s = spinner();
+  s.start('Listing worktrees...');
+  const all = await listWorktrees();
+  s.stop();
+
+  if (all.length === 0) {
+    logInfo('No worktrees found.');
+    outro('Done.');
+    return;
+  }
+
+  const selected = await promptSelectWorktreeForPull(all);
+
+  const s2 = spinner();
+  s2.start(`Pulling latest for "${selected.branch}"...`);
+  await pullBranch(selected.branch);
+  s2.stop(`"${selected.branch}" is up to date.`);
+
+  outro('Done.');
+}
+
+// ── worktree merge ────────────────────────────────────────────────────────────
+
+async function guardBeforeMerge() {
+  const changes = await getUncommittedChanges();
+  if (changes) {
+    logWarn(`Uncommitted changes detected:\n${changes}`);
+    const action = await promptUncommittedChangesForMerge();
+    if (action === 'add-and-stash') {
+      const s = spinner();
+      s.start('Staging all untracked files and stashing...');
+      await gitAddAll();
+      await stashSave();
+      s.stop('All changes staged and stashed.');
+    } else if (action === 'stash-first') {
+      const s = spinner();
+      s.start('Stashing current changes...');
+      await stashSave();
+      s.stop('Current changes stashed.');
+    }
+    // 'merge-anyway' — fall through and merge
+  }
+}
+
+export async function worktreeMergeAction(options) {
+  intro('geet wt merge');
+
+  const s = spinner();
+  s.start('Listing worktrees...');
+  const currentBranch = await getCurrentBranch();
+  const all = await listWorktrees();
+  s.stop();
+
+  const mergeable = all.filter((w) => w.branch !== currentBranch);
+
+  if (mergeable.length === 0) {
+    logInfo('No other worktrees to merge.');
+    outro('Done.');
+    return;
+  }
+
+  const selected = await promptSelectWorktreeForMerge(mergeable);
+
+  await guardBeforeMerge();
+
+  if (options.pull) {
+    const sPull = spinner();
+    sPull.start(`Pulling latest for "${selected.branch}"...`);
+    await pullBranch(selected.branch);
+    sPull.stop(`"${selected.branch}" is up to date.`);
+  }
+
+  const s2 = spinner();
+  s2.start(`Merging "${selected.branch}" into "${currentBranch}"...`);
+  await mergeBranch(selected.branch);
+  s2.stop(`Merged "${selected.branch}" into "${currentBranch}".`);
+
+  outro('Done.');
 }
 
 // ── Post-create helper ────────────────────────────────────────────────────────
