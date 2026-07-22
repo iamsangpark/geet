@@ -243,10 +243,30 @@ export async function worktreePruneAction(_options) {
   }
 
   const s3 = spinner();
+  const failed = [];
   for (const w of toRemove) {
     s3.start(`Removing worktree "${w.branch}"...`);
-    await removeWorktree(w.path);
-    s3.stop(`Removed: ${w.branch}`);
+    try {
+      await removeWorktree(w.path);
+      s3.stop(`Removed: ${w.branch}`);
+    } catch (err) {
+      s3.stop(`Failed to remove: ${w.branch}`);
+      failed.push({ worktree: w, message: err.gitMessage || err.message });
+    }
+  }
+
+  const removedCount = toRemove.length - failed.length;
+  if (removedCount > 0) {
+    logInfo(`Pruned ${removedCount} worktree(s).`);
+  }
+
+  if (failed.length > 0) {
+    logError(`Failed to remove ${failed.length} worktree(s):`);
+    for (const { worktree, message } of failed) {
+      logError(`  ${worktree.branch} (${worktree.path}): ${message}`);
+    }
+    outro('Prune completed with errors.');
+    return;
   }
 
   outro(`Pruned ${toRemove.length} worktree(s).`);
