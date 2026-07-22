@@ -100,7 +100,7 @@ async function worktreeCreateImpl(introText, options) {
       dir = path.join(WORKTREE_BASE, projectName, folderName);
     } else {
       const { projectName, jiraName, description: rawDescription } = await promptWorktreeSmartAdd(mappedProjectName);
-      const description = rawDescription.replace(/ /g, '_');
+      const description = rawDescription.trim().replace(/ /g, '_');
       const folderName = jiraName ? `${jiraName}-${description}` : description;
       dir = path.join(WORKTREE_BASE, projectName, folderName);
       branch = `${BRANCH_PREFIX}${folderName}`;
@@ -285,7 +285,7 @@ export async function worktreeRenameAction(_options) {
     description: currentDescription,
   });
 
-  const description = rawDescription.replace(/ /g, '_');
+  const description = rawDescription.trim().replace(/ /g, '_');
   const newFolderName = jiraName ? `${jiraName}-${description}` : description;
   const newDir = path.resolve(path.join(WORKTREE_BASE, projectName, newFolderName));
   const newBranch = `${BRANCH_PREFIX}${newFolderName}`;
