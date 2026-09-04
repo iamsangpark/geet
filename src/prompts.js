@@ -158,15 +158,20 @@ export async function promptSelectStash(stashes) {
 // ── Worktree Prompts ──────────────────────────────────────────────────────────
 
 /**
+ * Maps a worktree to a prompt option: folder name as the label, branch as the hint.
+ * @param {{ path: string, branch: string, commit: string, isMain: boolean }} w
+ */
+function toWorktreeOption(w) {
+  return { value: w, label: path.basename(w.path), hint: w.branch, searchText: `${w.branch} ${w.path}` };
+}
+
+/**
  * Displays worktrees and lets the user select one.
  * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
  * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
 export async function promptSelectWorktree(worktrees) {
-  return searchSelect(
-    'Select a worktree:',
-    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
-  );
+  return searchSelect('Select a worktree:', worktrees.map(toWorktreeOption));
 }
 
 /**
@@ -175,10 +180,7 @@ export async function promptSelectWorktree(worktrees) {
  * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
 export async function promptSelectWorktreeForRemove(worktrees) {
-  return searchSelect(
-    'Select a worktree to remove:',
-    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
-  );
+  return searchSelect('Select a worktree to remove:', worktrees.map(toWorktreeOption));
 }
 
 /**
@@ -187,10 +189,7 @@ export async function promptSelectWorktreeForRemove(worktrees) {
  * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
 export async function promptSelectWorktreeForRename(worktrees) {
-  return searchSelect(
-    'Select a worktree to rename:',
-    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
-  );
+  return searchSelect('Select a worktree to rename:', worktrees.map(toWorktreeOption));
 }
 
 /**
@@ -199,10 +198,7 @@ export async function promptSelectWorktreeForRename(worktrees) {
  * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
 export async function promptSelectWorktreeForLinkFix(worktrees) {
-  return searchSelect(
-    'Select a worktree to re-link:',
-    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
-  );
+  return searchSelect('Select a worktree to re-link:', worktrees.map(toWorktreeOption));
 }
 
 /**
@@ -213,11 +209,7 @@ export async function promptSelectWorktreeForLinkFix(worktrees) {
 export async function promptMultiSelectWorktreesForPrune(worktrees) {
   const selected = await p.multiselect({
     message: 'Select worktrees to prune (space to toggle, enter to confirm):',
-    options: worktrees.map((w) => ({
-      value: w,
-      label: w.branch,
-      hint: w.path,
-    })),
+    options: worktrees.map(toWorktreeOption),
     initialValues: worktrees,
   });
   return guardCancel(selected);
@@ -229,10 +221,7 @@ export async function promptMultiSelectWorktreesForPrune(worktrees) {
  * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
 export async function promptSelectWorktreeForPull(worktrees) {
-  return searchSelect(
-    'Select a worktree to pull:',
-    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
-  );
+  return searchSelect('Select a worktree to pull:', worktrees.map(toWorktreeOption));
 }
 
 /**
@@ -241,10 +230,7 @@ export async function promptSelectWorktreeForPull(worktrees) {
  * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
 export async function promptSelectWorktreeForMerge(worktrees) {
-  return searchSelect(
-    'Select a worktree to merge into the current branch:',
-    worktrees.map((w) => ({ value: w, label: w.branch, hint: w.path, searchText: `${w.branch} ${w.path}` })),
-  );
+  return searchSelect('Select a worktree to merge into the current branch:', worktrees.map(toWorktreeOption));
 }
 
 /**
