@@ -179,7 +179,7 @@ worktreeCmd
 
 worktreeCmd
   .command('list')
-  .description('List worktrees; copies path to clipboard and opens shell in selection')
+  .description('List worktrees; copies path to clipboard and opens a shell (or herdr workspace when GEET_HERDR is enabled) in selection')
   .action(worktreeListAction);
 
 worktreeCmd

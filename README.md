@@ -98,7 +98,7 @@ After a worktree is created (`new` / `add`), geet:
 1. Copies the worktree path to the clipboard.
 2. Symlinks any configured `GEET_SYMLINK_PATHS` from the main worktree.
 3. Runs the [init scripts](#init-scripts) (unless `--no-init`).
-4. Opens a shell inside the new worktree.
+4. Opens a shell inside the new worktree — or, when running inside [herdr](https://herdr.dev) with `GEET_HERDR` enabled, opens it as a herdr workspace (see [herdr integration](#herdr-integration)).
 
 ---
 
@@ -310,15 +310,26 @@ Config values are loaded from the following sources, lowest to highest priority:
 | `GEET_WORKTREE_BASE` | `~/worktrees` | Base directory for worktrees created by `worktree new` / `add`. |
 | `GEET_BRANCH_PREFIX` | *(none)* | Prefix prepended to branch names created by `worktree new`. |
 | `GEET_SYMLINK_PATHS` | *(none)* | Comma-separated relative paths symlinked from the main worktree into each new worktree. |
+| `GEET_HERDR` | `off` | `off`, `prompt` or `auto` — open worktrees as [herdr](https://herdr.dev) workspaces. See [herdr integration](#herdr-integration). |
 
 ```sh
 # ~/.geet/config
 GEET_WORKTREE_BASE=~/dev/worktrees
 GEET_BRANCH_PREFIX=sp/
 GEET_SYMLINK_PATHS=.env.local,node_modules
+GEET_HERDR=prompt
 ```
 
 Use `geet config global|local|set` to edit these interactively.
+
+### herdr integration
+
+When `GEET_HERDR` is `prompt` or `auto` **and** geet is running inside a herdr pane (herdr sets `HERDR_ENV=1`), the end of `worktree new` / `add` / `list` opens the worktree as a herdr workspace instead of spawning a nested shell:
+
+- `prompt` asks each time ("Open in new herdr workspace" / "Switch to herdr workspace" / "Open shell here"); `auto` always opens the workspace.
+- If a workspace for the worktree is already open, geet switches to it rather than creating a duplicate. `worktree list` marks such worktrees with `herdr ●`.
+- `worktree remove` / `prune` also close the removed worktree's herdr workspace (never the one geet is running in).
+- Outside herdr, with `GEET_HERDR=off`, or if the `herdr` command fails, geet falls back to the normal shell. Use `GEET_HERDR=off geet wt …` for a one-off override.
 
 ### Init scripts
 

@@ -159,10 +159,16 @@ export async function promptSelectStash(stashes) {
 
 /**
  * Maps a worktree to a prompt option: folder name as the label, branch as the hint.
- * @param {{ path: string, branch: string, commit: string, isMain: boolean }} w
+ * Optional `decorators` (extra strings) are appended to the hint.
+ * @param {{ path: string, branch: string, commit: string, isMain: boolean, decorators?: string[] }} w
  */
 function toWorktreeOption(w) {
-  return { value: w, label: path.basename(w.path), hint: w.branch, searchText: `${w.branch} ${w.path}` };
+  return {
+    value: w,
+    label: path.basename(w.path),
+    hint: [w.branch, ...(w.decorators ?? [])].join(' · '),
+    searchText: `${w.branch} ${w.path}`,
+  };
 }
 
 /**
@@ -448,6 +454,25 @@ export async function promptOverrideOrSkip() {
       { value: 'edit', label: 'Edit', hint: 'open the existing script in $EDITOR' },
       { value: 'override', label: 'Override', hint: 'replace the existing script' },
       { value: 'skip', label: 'Skip', hint: 'leave the existing script unchanged' },
+    ],
+  });
+  return guardCancel(action);
+}
+
+/**
+ * Ask whether to open a worktree as a herdr workspace or a plain shell.
+ *
+ * @param {boolean} alreadyOpen  — a herdr workspace already exists for the worktree
+ * @returns {Promise<'herdr' | 'shell'>}
+ */
+export async function promptHerdrOpen(alreadyOpen) {
+  const action = await p.select({
+    message: 'Open worktree:',
+    options: [
+      alreadyOpen
+        ? { value: 'herdr', label: 'Switch to herdr workspace', hint: 'already open' }
+        : { value: 'herdr', label: 'Open in new herdr workspace' },
+      { value: 'shell', label: 'Open shell here' },
     ],
   });
   return guardCancel(action);

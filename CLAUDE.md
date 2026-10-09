@@ -22,6 +22,7 @@ src/
 ├── index.js          # CLI entry point: commander subcommand registration + omelette autocompletion
 ├── config.js         # Config loader: ~/.geetrc → .env → .env.local → process.env
 ├── gitUtils.js       # All git operations (via execa) — the only file that shells out to git
+├── herdrUtils.js     # herdr CLI calls (via execa) + HERDR_ENV detection
 ├── prompts.js        # @clack/prompts wrappers + guardCancel() pattern
 └── commands/
     ├── checkout.js
@@ -44,5 +45,7 @@ src/
 2. `.env`
 3. `.env.local`
 4. `process.env`
+
+`GEET_HERDR` (`off` default | `prompt` | `auto`, exported as `HERDR_MODE`) enables herdr integration. It only applies when `HERDR_ENV=1` (inside a herdr pane); `worktree new/add/list` then open the worktree via `herdr worktree open` instead of spawning a shell, and `remove`/`prune` close the matching herdr workspace. All herdr CLI calls live in `src/herdrUtils.js` (the only file that shells out to herdr); on any herdr failure geet falls back to `spawnShellIn`.
 
 After `worktree add` (including `worktree add -i`), the tool runs init scripts in order: `~/.geet/init/default.sh` (always, if executable), then `~/.geet/init/<repo-name>.sh` (repo-specific, if executable). Both are run in the new worktree directory. Use `geet config init-script --default` (or `-d`) to scaffold `default.sh` and `geet config init-script` to scaffold the repo-specific one.
