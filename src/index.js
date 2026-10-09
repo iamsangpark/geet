@@ -47,6 +47,7 @@ import {
 import { mergeReleaseAction } from './commands/mergeRelease.js';
 import { copyPathAction, copyJiraAction, copyBranchAction } from './commands/copy.js';
 import {
+  configListAction,
   configGlobalAction,
   configLocalAction,
   configSetAction,
@@ -80,7 +81,7 @@ completion.on('worktree', ({ reply }) => {
 
 // Subcommand completions for `geet config <sub>`
 completion.on('config', ({ reply }) => {
-  reply(['global', 'local', 'set', 'init-script', 'project-map']);
+  reply(['list', 'global', 'local', 'set', 'init-script', 'project-map']);
 });
 
 // omelette.init() must be called before program.parse().
@@ -241,7 +242,13 @@ copyCmd
 const configCmd = program
   .command('config')
   .alias('cfg')
-  .description('Manage geet config & init scripts  (subcommands: global, local, set, init-script, project-map)');
+  .description('Manage geet config & init scripts  (subcommands: list, global, local, set, init-script, project-map)');
+
+configCmd
+  .command('list')
+  .description('List config values currently set; use -a to show every option plus global values')
+  .option('-a, --all', 'Show all options (set or not) and values set in the global config')
+  .action(configListAction);
 
 configCmd
   .command('global')
