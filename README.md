@@ -10,7 +10,7 @@ A personal, interactive Git wrapper with safety guards, worktree management, and
 
 ```sh
 git clone <repo>
-cd git-util
+cd geet
 npm install
 npm link
 ```
@@ -40,15 +40,21 @@ geet co                        # prompts for branch name interactively
 
 ---
 
-### `geet stash [message]` · alias: `sts`
+### `geet stash` · alias: `sts`
 
-Stash your uncommitted changes with an optional description.
+Stash your changes, **including untracked files** (they are staged with `git add -A` first).
 
-Subcommands: `pop`, `list`
+Prompts for a stash message unless `-m` is given. Subcommands: `pop`, `list`.
+
+| Flag | Description |
+|---|---|
+| `-m, --message <msg>` | Stash message (skips the prompt). |
+| `-k, --keep-untracked` | Leave untracked files in the working tree instead of stashing them. |
 
 ```sh
 geet stash
-geet sts "WIP: refactoring auth module"
+geet sts -m "WIP: refactoring auth module"
+geet sts -k
 ```
 
 ---
@@ -57,7 +63,7 @@ geet sts "WIP: refactoring auth module"
 
 Pop the most recent stash with an uncommitted-change guard.
 
-If you have uncommitted changes, prompts you to either **stash them first** or **pop anyway**.
+If you have uncommitted changes, prompts you to **add all & stash them first**, **stash them first**, or **pop anyway**.
 
 ```sh
 geet stash pop
@@ -83,53 +89,181 @@ geet sts list
 
 ### `geet worktree` · alias: `wt`
 
-Manage git worktrees.
+Manage git worktrees. Running `geet worktree` with no subcommand is the same as `geet worktree list`.
 
-Subcommands: `add`, `smart-add`, `list`
+Subcommands: `new`, `add`, `list`, `remove`, `prune`, `copy-path`, `rename`, `link-fix`, `pull`, `merge`
 
----
+After a worktree is created (`new` / `add`), geet:
 
-### `geet worktree add <branch> <dir>`
-
-Add a git worktree at the given path for the given branch.
-
-```sh
-geet worktree add feature/my-branch ~/projects/my-branch
-geet wt add feature/my-branch ~/projects/my-branch
-```
+1. Copies the worktree path to the clipboard.
+2. Symlinks any configured `GEET_SYMLINK_PATHS` from the main worktree.
+3. Runs the [init scripts](#init-scripts) (unless `--no-init`).
+4. Opens a shell inside the new worktree.
 
 ---
 
-### `geet worktree smart-add`
+### `geet worktree new`
 
-Interactively create a worktree with a standardized path.
-
-Prompts for three values and formats the path as:
+Interactively create a **new branch and worktree** at a standardized path:
 
 ```
-~/worktrees/<projectName>/<jiraName>-<description>
+<GEET_WORKTREE_BASE>/<projectName>/<jiraName>-<description>
 ```
+
+The branch is named `<GEET_BRANCH_PREFIX><jiraName>-<description>`. Spaces in the description become `_`, and the Jira ticket is optional. If the repo has a [project mapping](#geet-config-project-map), the project name prompt is pre-filled.
+
+| Flag | Description |
+|---|---|
+| `-f, --folder <dir>` | Target directory for the new worktree. |
+| `-b, --branch <branch>` | Branch name for the new worktree. |
+| `--no-init` | Skip running init scripts after creation. |
+
+Pass both `-f` and `-b` to skip all prompts.
 
 ```sh
-geet wt smart-add
+geet wt new
 # → Project name:   my-app
 # → Jira ticket:    PROJ-1234
-# → Description:    add-login-page
-# → Creates worktree at ~/worktrees/my-app/PROJ-1234-add-login-page
+# → Description:    add login page
+# → Creates worktree at ~/worktrees/my-app/PROJ-1234-add_login_page
+
+geet wt new -f ~/worktrees/my-app/hotfix -b hotfix --no-init
+```
+
+---
+
+### `geet worktree add`
+
+Check out an **existing local branch** as a new worktree. Lists local branches that aren't already checked out, then asks for the project name. The folder name is the branch name with `GEET_BRANCH_PREFIX` stripped.
+
+| Flag | Description |
+|---|---|
+| `--no-init` | Skip running init scripts after creation. |
+
+```sh
+geet wt add
 ```
 
 ---
 
 ### `geet worktree list`
 
-List all active worktrees and take an action on the selected one:
-
-1. **Copy path to clipboard** — copies the absolute path for use elsewhere.
-2. **Open a new shell session** — spawns a shell inside the worktree directory.
+Select a worktree (with fuzzy search). Its path is copied to the clipboard and a new shell is opened inside it.
 
 ```sh
 geet wt list
+geet wt            # same thing
 ```
+
+---
+
+### `geet worktree remove`
+
+Interactively select a worktree (other than the main one) to remove.
+
+```sh
+geet wt remove
+```
+
+---
+
+### `geet worktree prune`
+
+Fetches from origin (pruning deleted remote branches), then finds worktrees whose remote-tracking branch no longer exists. You pick which of those to remove. Failures on individual worktrees are reported without stopping the rest.
+
+```sh
+geet wt prune
+```
+
+---
+
+### `geet worktree copy-path`
+
+Copy the path of the worktree you're currently in to the clipboard.
+
+```sh
+geet wt copy-path
+```
+
+---
+
+### `geet worktree rename`
+
+Interactively rename a worktree: moves its folder and switches it to a new branch, then offers to delete the old branch. Prompts are pre-filled from the current path.
+
+```sh
+geet wt rename
+```
+
+---
+
+### `geet worktree link-fix`
+
+Re-create the `GEET_SYMLINK_PATHS` symlinks from the main worktree into a selected worktree, replacing any existing links.
+
+```sh
+geet wt link-fix
+```
+
+---
+
+### `geet worktree pull`
+
+Select a worktree and pull the latest changes for its branch.
+
+```sh
+geet wt pull
+```
+
+---
+
+### `geet worktree merge`
+
+Select a worktree branch to merge into the **current branch**. If you have uncommitted changes, prompts you to add all & stash, stash, or merge anyway.
+
+| Flag | Description |
+|---|---|
+| `-p, --pull` | Pull the selected branch from origin before merging. |
+
+```sh
+geet wt merge
+geet wt merge -p
+```
+
+---
+
+### `geet config` · alias: `cfg`
+
+Manage geet configuration and init scripts. Subcommands: `global`, `local`, `set`, `init-script`, `project-map`.
+
+#### `geet config global`
+
+Interactively create or update `~/.geet/config`. Existing values are pre-filled.
+
+#### `geet config local`
+
+Create or update `.env` or `.env.local` in the current directory.
+
+#### `geet config set`
+
+Update a single config key in a file you choose.
+
+#### `geet config init-script`
+
+Scaffold the init script for the current repo at `~/.geet/init/<repo-name>.sh`. Lets you start from a stub or copy/move an existing script, marks it executable, and opens it in `$EDITOR`. If the script already exists you can override, edit, or skip.
+
+| Flag | Description |
+|---|---|
+| `-d, --default` | Scaffold `~/.geet/init/default.sh` (runs for every repo) instead. |
+
+```sh
+geet config init-script -d   # default script
+geet config init-script      # this repo's script
+```
+
+#### `geet config project-map`
+
+Set (or clear) the project name for the current repo. It's stored in `~/.geet/project-map.json` and used by `worktree new` / `add` to pre-fill the project name prompt.
 
 ---
 
@@ -151,6 +285,41 @@ geet merge-release release/1.2.0 develop
 geet merge-release release/1.2.0 develop -n
 geet merge-release release/1.2.0 develop --no-change
 ```
+
+---
+
+## Configuration
+
+Config values are loaded from the following sources, lowest to highest priority:
+
+1. `~/.geet/config` — global defaults
+2. `.env` — project-level defaults
+3. `.env.local` — local overrides (don't commit)
+4. `process.env` — shell environment
+
+| Key | Default | Description |
+|---|---|---|
+| `GEET_WORKTREE_BASE` | `~/worktrees` | Base directory for worktrees created by `worktree new` / `add`. |
+| `GEET_BRANCH_PREFIX` | *(none)* | Prefix prepended to branch names created by `worktree new`. |
+| `GEET_SYMLINK_PATHS` | *(none)* | Comma-separated relative paths symlinked from the main worktree into each new worktree. |
+
+```sh
+# ~/.geet/config
+GEET_WORKTREE_BASE=~/dev/worktrees
+GEET_BRANCH_PREFIX=sp/
+GEET_SYMLINK_PATHS=.env.local,node_modules
+```
+
+Use `geet config global|local|set` to edit these interactively.
+
+### Init scripts
+
+After `worktree new` / `worktree add`, geet runs these in the new worktree directory (each only if it exists and is executable):
+
+1. `~/.geet/init/default.sh` — for every repo
+2. `~/.geet/init/<repo-name>.sh` — for the repo only
+
+Scaffold them with `geet config init-script -d` and `geet config init-script`. Skip them with `--no-init`.
 
 ---
 
@@ -178,11 +347,13 @@ After setup, pressing Tab after `geet ` will complete subcommands and aliases.
 ```
 src/
 ├── index.js              # CLI entry point (commander + omelette)
+├── config.js             # Config loader (~/.geet/config → .env → .env.local → process.env)
 ├── gitUtils.js           # All git operations via execa
 ├── prompts.js            # @clack/prompts helpers
 └── commands/
     ├── checkout.js
     ├── stash.js
     ├── worktree.js
+    ├── config.js
     └── mergeRelease.js
 ```
