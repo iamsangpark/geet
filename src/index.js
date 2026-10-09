@@ -39,13 +39,13 @@ import {
   worktreeListAction,
   worktreeRemoveAction,
   worktreePruneAction,
-  worktreeCopyPathAction,
   worktreeRenameAction,
   worktreeLinkFixAction,
   worktreePullAction,
   worktreeMergeAction,
 } from './commands/worktree.js';
 import { mergeReleaseAction } from './commands/mergeRelease.js';
+import { copyPathAction, copyJiraAction, copyBranchAction } from './commands/copy.js';
 import {
   configGlobalAction,
   configLocalAction,
@@ -60,7 +60,12 @@ const completion = omelette('geet <command>');
 
 // Top-level subcommand completions
 completion.on('command', ({ reply }) => {
-  reply(['checkout', 'co', 'stash', 'sts', 'worktree', 'wt', 'merge-release', 'config', 'cfg']);
+  reply(['checkout', 'co', 'stash', 'sts', 'worktree', 'wt', 'merge-release', 'config', 'cfg', 'copy', 'cp']);
+});
+
+// Subcommand completions for `geet copy <sub>`
+completion.on('copy', ({ reply }) => {
+  reply(['path', 'worktree', 'jira', 'branch']);
 });
 
 // Subcommand completions for `geet stash <sub>`
@@ -70,7 +75,7 @@ completion.on('stash', ({ reply }) => {
 
 // Subcommand completions for `ga worktree <sub>`
 completion.on('worktree', ({ reply }) => {
-  reply(['new', 'add', 'list', 'remove', 'prune', 'copy-path', 'rename', 'link-fix', 'pull', 'merge']);
+  reply(['new', 'add', 'list', 'remove', 'prune', 'rename', 'link-fix', 'pull', 'merge']);
 });
 
 // Subcommand completions for `geet config <sub>`
@@ -148,7 +153,7 @@ stashCmd
 const worktreeCmd = program
   .command('worktree')
   .alias('wt')
-  .description('Manage git worktrees  (subcommands: new, add, list, remove, prune, copy-path, rename, link-fix, pull, merge)')
+  .description('Manage git worktrees  (subcommands: new, add, list, remove, prune, rename, link-fix, pull, merge)')
   .action((options, cmd) => {
     if (cmd.args.length > 0) {
       const err = new Error();
@@ -188,11 +193,6 @@ worktreeCmd
   .action(worktreePruneAction);
 
 worktreeCmd
-  .command('copy-path')
-  .description('Copy the current worktree folder path to clipboard')
-  .action(worktreeCopyPathAction);
-
-worktreeCmd
   .command('rename')
   .description('Interactively rename a worktree: move its folder and rename its branch')
   .action(worktreeRenameAction);
@@ -212,6 +212,29 @@ worktreeCmd
   .description('Interactively select a worktree branch to merge into the current branch')
   .option('-p, --pull', 'Pull the target branch from origin before merging')
   .action(worktreeMergeAction);
+
+// ── copy ──────────────────────────────────────────────────────────────────────
+
+const copyCmd = program
+  .command('copy')
+  .alias('cp')
+  .description('Copy repo info to the clipboard  (subcommands: path, worktree, jira, branch)');
+
+copyCmd
+  .command('path')
+  .alias('worktree')
+  .description('Copy the current worktree folder path')
+  .action(copyPathAction);
+
+copyCmd
+  .command('jira')
+  .description('Copy the Jira ticket key from the current branch or worktree folder name')
+  .action(copyJiraAction);
+
+copyCmd
+  .command('branch')
+  .description('Copy the current branch name')
+  .action(copyBranchAction);
 
 // ── config ────────────────────────────────────────────────────────────────────
 
