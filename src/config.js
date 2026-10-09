@@ -14,6 +14,10 @@
  *   GEET_SYMLINK_PATHS    — comma-separated relative paths to symlink from the
  *                           main worktree into each newly-created worktree
  *                           example: .env.local,node_modules,.idea
+ *   GEET_HERDR            — herdr integration for `geet worktree`: off | prompt | auto
+ *                           default: off. Only takes effect inside a herdr pane
+ *                           (HERDR_ENV=1); worktrees open as herdr workspaces
+ *                           instead of a nested shell.
  *
  * Init scripts (no config key needed):
  *   ~/.geet/init/<repo-name>.sh — executed in the new worktree directory after
@@ -59,6 +63,12 @@ export const CONFIG_KEYS = [
     label: 'Symlink paths (comma-separated)',
     placeholder: '.env.local,node_modules',
     hint: 'symlinked into each new worktree',
+  },
+  {
+    key: 'GEET_HERDR',
+    label: 'herdr integration',
+    placeholder: 'prompt',
+    hint: 'off | prompt | auto — open worktrees as herdr workspaces',
   },
 ];
 
@@ -155,6 +165,11 @@ export const SYMLINK_PATHS = (process.env.GEET_SYMLINK_PATHS ?? '')
   .split(',')
   .map((p) => p.trim())
   .filter(Boolean);
+
+const herdrRaw = (process.env.GEET_HERDR ?? '').trim().toLowerCase();
+
+/** 'off' | 'prompt' | 'auto' — unrecognised values fall back to 'off'. */
+export const HERDR_MODE = herdrRaw === 'prompt' || herdrRaw === 'auto' ? herdrRaw : 'off';
 
 // ── Project map (~/.geet/project-map.json) ────────────────────────────────────
 

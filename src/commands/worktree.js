@@ -33,6 +33,12 @@ import {
   mergeBranch,
 } from '../gitUtils.js';
 import {
+  herdrMode,
+  listHerdrWorktrees,
+  openHerdrWorktree,
+  closeHerdrWorkspace,
+} from '../herdrUtils.js';
+import {
   intro,
   outro,
   logInfo,
@@ -52,6 +58,7 @@ import {
   promptWorktreeProjectName,
   promptSelectExistingBranch,
   promptConfirm,
+  promptHerdrOpen,
 } from '../prompts.js';
 
 // ── worktree new / add ────────────────────────────────────────────────────────
@@ -147,14 +154,21 @@ export async function worktreeListAction(_options) {
     return;
   }
 
-  const selected = await promptSelectWorktree(worktrees);
+  const mainPath = worktrees.find((w) => w.isMain)?.path;
+  const openWorkspaces = await openHerdrWorkspaces(mainPath);
+  const decorated = worktrees.map((w) =>
+    openWorkspaces.has(path.resolve(w.path)) ? { ...w, decorators: ['herdr ●'] } : w,
+  );
+
+  const selected = await promptSelectWorktree(decorated);
 
   const { default: clipboard } = await import('clipboardy');
   await clipboard.write(selected.path);
   logSuccess(`Path copied to clipboard: ${selected.path}`);
 
-  outro(`Spawning shell in: ${selected.path}`);
-  spawnShellIn(selected.path);
+  await openWorktree(selected.path, mainPath, {
+    alreadyOpen: openWorkspaces.has(path.resolve(selected.path)),
+  });
 }
 
 // ── worktree remove ───────────────────────────────────────────────────────────
@@ -177,10 +191,15 @@ export async function worktreeRemoveAction(_options) {
 
   const selected = await promptSelectWorktreeForRemove(removable);
 
+  // Look up herdr workspaces before removal, while herdr still lists the checkout
+  const openWorkspaces = await openHerdrWorkspaces(all.find((w) => w.isMain)?.path);
+
   const s2 = spinner();
   s2.start(`Removing worktree "${selected.branch}"...`);
   await removeWorktree(selected.path);
   s2.stop('Worktree removed.');
+
+  await closeHerdrWorkspaceFor(selected.path, openWorkspaces);
 
   outro(`Removed: ${selected.path}`);
 }
@@ -220,6 +239,8 @@ export async function worktreePruneAction(_options) {
     return;
   }
 
+  const openWorkspaces = await openHerdrWorkspaces(all.find((w) => w.isMain)?.path);
+
   const s3 = spinner();
   const failed = [];
   for (const w of toRemove) {
@@ -227,6 +248,7 @@ export async function worktreePruneAction(_options) {
     try {
       await removeWorktree(w.path);
       s3.stop(`Removed: ${w.branch}`);
+      await closeHerdrWorkspaceFor(w.path, openWorkspaces);
     } catch (err) {
       s3.stop(`Failed to remove: ${w.branch}`);
       failed.push({ worktree: w, message: err.gitMessage || err.message });
@@ -460,8 +482,75 @@ async function postWorktreeCreate(dir, { skipInit = false } = {}) {
     await runInitScript(mainWorktree.path, dir);
   }
 
+  await openWorktree(dir, mainWorktree?.path);
+}
+
+/**
+ * Final step for new/list: open the worktree as a herdr workspace (or switch to
+ * its existing one) when GEET_HERDR allows it and we're inside herdr; otherwise
+ * — or if herdr fails — spawn a shell in the directory.
+ *
+ * @param {string} dir               — worktree path
+ * @param {string} [mainWorktreePath] — repo root, used as herdr's repo context
+ * @param {{ alreadyOpen?: boolean }} [opts]
+ */
+async function openWorktree(dir, mainWorktreePath, { alreadyOpen = false } = {}) {
+  const mode = herdrMode();
+
+  if (mode !== 'off' && mainWorktreePath) {
+    const choice = mode === 'prompt' ? await promptHerdrOpen(alreadyOpen) : 'herdr';
+
+    if (choice === 'herdr') {
+      try {
+        const label = path.basename(dir);
+        const result = await openHerdrWorktree({ repoPath: mainWorktreePath, dir, label });
+        outro(`${result.alreadyOpen ? 'Switched to' : 'Opened'} herdr workspace: ${label}`);
+        return;
+      } catch (err) {
+        logWarn(`${err.gitMessage || err.message} — falling back to a shell.`);
+      }
+    }
+  }
+
   outro(`Spawning shell in: ${dir}`);
   spawnShellIn(dir);
+}
+
+/**
+ * Best-effort lookup of herdr workspaces that are open for the given worktrees.
+ * Returns a Map of worktree path → open workspace id. Empty when herdr is off
+ * or unreachable.
+ *
+ * @param {string} [mainWorktreePath]
+ * @returns {Promise<Map<string, string>>}
+ */
+async function openHerdrWorkspaces(mainWorktreePath) {
+  const open = new Map();
+  if (herdrMode() === 'off' || !mainWorktreePath) return open;
+
+  try {
+    for (const w of await listHerdrWorktrees(mainWorktreePath)) {
+      if (w.open_workspace_id) open.set(path.resolve(w.path), w.open_workspace_id);
+    }
+  } catch {
+    // herdr unreachable — treat as "nothing open"
+  }
+  return open;
+}
+
+/**
+ * Closes the herdr workspace for a removed worktree, unless it is the workspace
+ * geet itself is running in. Failures are warnings, never fatal.
+ */
+async function closeHerdrWorkspaceFor(worktreePath, openWorkspaces) {
+  const id = openWorkspaces.get(path.resolve(worktreePath));
+  if (!id || id === process.env.HERDR_WORKSPACE_ID) return;
+
+  try {
+    await closeHerdrWorkspace(id);
+  } catch (err) {
+    logWarn(`Could not close herdr workspace: ${err.gitMessage || err.message}`);
+  }
 }
 
 /**
