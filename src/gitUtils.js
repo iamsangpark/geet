@@ -192,6 +192,25 @@ export async function removeWorktree(dir) {
 }
 
 /**
+ * Returns the `git status --porcelain` lines for a worktree, listing individual
+ * untracked files. Empty array means nothing would block `worktree remove`.
+ * @returns {Promise<string[]>}
+ */
+export async function getWorktreeChanges(dir) {
+  const stdout = await git(['status', '--porcelain', '--untracked-files=all'], { cwd: dir });
+  return stdout.split('\n').filter(Boolean);
+}
+
+/**
+ * Discards all tracked changes and deletes untracked files in a worktree.
+ * Gitignored files are left alone (they don't block `worktree remove`).
+ */
+export async function resetWorktree(dir) {
+  await git(['reset', '--hard'], { cwd: dir });
+  await git(['clean', '-fd'], { cwd: dir });
+}
+
+/**
  * Moves a worktree from oldPath to newPath.
  */
 export async function moveWorktree(oldPath, newPath) {

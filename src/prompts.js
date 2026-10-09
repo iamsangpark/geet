@@ -12,7 +12,7 @@ import path from 'path';
 import os from 'os';
 import * as p from '@clack/prompts';
 import search from '@inquirer/search';
-import { CONFIG_KEYS, GLOBAL_CONFIG_PATH } from './config.js';
+import { CONFIG_KEYS, GLOBAL_CONFIG_PATH, WORKTREE_LIST_SIZE } from './config.js';
 
 // ── Cancel Guard ──────────────────────────────────────────────────────────────
 
@@ -59,21 +59,33 @@ function fuzzyMatch(input, target) {
 }
 
 async function searchSelect(message, options) {
+  // @inquirer/search has no ESC handling, so abort the prompt on a bare Escape keypress
+  const controller = new AbortController();
+  const onKeypress = (_str, key) => {
+    if (key?.name === 'escape') controller.abort();
+  };
+  process.stdin.on('keypress', onKeypress);
+
   try {
-    const result = await search({
-      message,
-      source: (input) =>
-        options
-          .filter((o) => fuzzyMatch(input, o.searchText))
-          .map((o) => ({ name: o.label, value: o.value, description: o.hint })),
-    });
-    return result;
+    return await search(
+      {
+        message,
+        pageSize: WORKTREE_LIST_SIZE === 0 ? Math.max(options.length, 1) : WORKTREE_LIST_SIZE,
+        source: (input) =>
+          options
+            .filter((o) => fuzzyMatch(input, o.searchText))
+            .map((o) => ({ name: o.label, value: o.value, description: o.hint })),
+      },
+      { signal: controller.signal },
+    );
   } catch (err) {
-    if (err.name === 'ExitPromptError') {
+    if (err.name === 'ExitPromptError' || err.name === 'AbortPromptError') {
       p.cancel('Operation cancelled.');
       process.exit(0);
     }
     throw err;
+  } finally {
+    process.stdin.off('keypress', onKeypress);
   }
 }
 
@@ -187,6 +199,21 @@ export async function promptSelectWorktree(worktrees) {
  */
 export async function promptSelectWorktreeForRemove(worktrees) {
   return searchSelect('Select a worktree to remove:', worktrees.map(toWorktreeOption));
+}
+
+/**
+ * Shown before `worktree remove` when the worktree has changes that block removal.
+ * @returns {Promise<'reset' | 'cancel'>}
+ */
+export async function promptWorktreeChangesForRemove() {
+  const action = await p.select({
+    message: 'This worktree has changes that prevent removal. How should we proceed?',
+    options: [
+      { value: 'reset', label: 'Reset and remove', hint: 'discards changes and deletes untracked files' },
+      { value: 'cancel', label: 'Cancel' },
+    ],
+  });
+  return guardCancel(action);
 }
 
 /**
