@@ -190,6 +190,21 @@ export async function promptSelectWorktreeForRemove(worktrees) {
 }
 
 /**
+ * Shown before `worktree remove` when the worktree has changes that block removal.
+ * @returns {Promise<'reset' | 'cancel'>}
+ */
+export async function promptWorktreeChangesForRemove() {
+  const action = await p.select({
+    message: 'This worktree has changes that prevent removal. How should we proceed?',
+    options: [
+      { value: 'reset', label: 'Reset and remove', hint: 'discards changes and deletes untracked files' },
+      { value: 'cancel', label: 'Cancel' },
+    ],
+  });
+  return guardCancel(action);
+}
+
+/**
  * Displays non-main worktrees and lets the user select one to rename.
  * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
  * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}

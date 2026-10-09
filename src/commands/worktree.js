@@ -27,6 +27,8 @@ import {
   remoteTrackingExists,
   getCurrentBranch,
   getUncommittedChanges,
+  getWorktreeChanges,
+  resetWorktree,
   gitAddAll,
   stashSave,
   pullBranch,
@@ -48,6 +50,7 @@ import {
   spinner,
   promptSelectWorktree,
   promptSelectWorktreeForRemove,
+  promptWorktreeChangesForRemove,
   promptSelectWorktreeForRename,
   promptSelectWorktreeForLinkFix,
   promptSelectWorktreeForPull,
@@ -194,12 +197,36 @@ export async function worktreeRemoveAction(_options) {
   // Look up herdr workspaces before removal, while herdr still lists the checkout
   const openWorkspaces = await openHerdrWorkspaces(all.find((w) => w.isMain)?.path);
 
+  // Ask everything up front so nothing destructive happens before the last answer
+  const workspaceId = openWorkspaces.get(path.resolve(selected.path));
+  const closable = workspaceId && workspaceId !== process.env.HERDR_WORKSPACE_ID;
+  const closeWorkspace = closable
+    ? await promptConfirm('A herdr workspace is open for this worktree. Close it too?')
+    : false;
+
+  const changes = await getWorktreeChanges(selected.path);
+  const needsReset = changes.length > 0;
+  if (needsReset) {
+    logWarn(`Uncommitted changes in ${selected.path}:\n${changes.join('\n')}`);
+    if ((await promptWorktreeChangesForRemove()) === 'cancel') {
+      outro('Nothing removed.');
+      return;
+    }
+
+    const sReset = spinner();
+    sReset.start('Resetting worktree...');
+    await resetWorktree(selected.path);
+    sReset.stop('Worktree reset.');
+  }
+
   const s2 = spinner();
   s2.start(`Removing worktree "${selected.branch}"...`);
   await removeWorktree(selected.path);
   s2.stop('Worktree removed.');
 
-  await closeHerdrWorkspaceFor(selected.path, openWorkspaces);
+  if (closeWorkspace) {
+    await closeHerdrWorkspaceFor(selected.path, openWorkspaces);
+  }
 
   outro(`Removed: ${selected.path}`);
 }
