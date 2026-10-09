@@ -338,7 +338,8 @@ export async function promptConfigValues(currentValues = {}) {
       initialValue: currentValues[key] ?? '',
     });
     guardCancel(value);
-    if (value.trim()) result[key] = value.trim();
+    const trimmed = value?.trim();
+    if (trimmed) result[key] = trimmed;
   }
   return result;
 }

@@ -136,7 +136,8 @@ export async function configSetAction() {
   });
   guardCancel(newValue);
 
-  if (!newValue.trim()) {
+  const trimmedValue = newValue?.trim();
+  if (!trimmedValue) {
     logWarn('Empty value — nothing written.');
     outro('Done.');
     return;
@@ -144,10 +145,10 @@ export async function configSetAction() {
 
   const s2 = spinner();
   s2.start(`Updating ${key} in ${path.basename(filePath)}...`);
-  await writeEnvValues(filePath, { [key]: newValue.trim() });
+  await writeEnvValues(filePath, { [key]: trimmedValue });
   s2.stop('Value updated.');
 
-  outro(`${key}=${newValue.trim()} → ${filePath}`);
+  outro(`${key}=${trimmedValue} → ${filePath}`);
 }
 
 // ── config project-map ────────────────────────────────────────────────────────
@@ -190,14 +191,15 @@ export async function configProjectMapAction() {
   });
   guardCancel(projectName);
 
-  if (!projectName.trim()) {
+  const trimmedName = projectName?.trim();
+  if (!trimmedName) {
     delete map[repoName];
     await writeProjectMap(map);
     logWarn(`Cleared project mapping for "${repoName}".`);
   } else {
-    map[repoName] = projectName.trim();
+    map[repoName] = trimmedName;
     await writeProjectMap(map);
-    logSuccess(`Mapped: ${repoName} → ${projectName.trim()}`);
+    logSuccess(`Mapped: ${repoName} → ${trimmedName}`);
   }
 
   outro(`Saved: ${GLOBAL_PROJECT_MAP_PATH}`);
@@ -261,7 +263,7 @@ async function scaffoldInitScript(targetPath, stubContent) {
   await mkdir(INIT_DIR, { recursive: true });
 
   const srcInput = await promptInitScriptSource();
-  const srcPath = srcInput.trim();
+  const srcPath = srcInput?.trim() ?? '';
 
   if (srcPath) {
     try {
