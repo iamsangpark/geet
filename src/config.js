@@ -18,6 +18,9 @@
  *                           default: off. Only takes effect inside a herdr pane
  *                           (HERDR_ENV=1); worktrees open as herdr workspaces
  *                           instead of a nested shell.
+ *   GEET_WORKTREE_LIST_SIZE — number of rows visible in searchable selection lists
+ *                           (worktrees, branches). default: 10. 0 shows every item
+ *                           instead of a scrolling list.
  *
  * Init scripts (no config key needed):
  *   ~/.geet/init/<repo-name>.sh — executed in the new worktree directory after
@@ -69,6 +72,12 @@ export const CONFIG_KEYS = [
     label: 'herdr integration',
     placeholder: 'prompt',
     hint: 'off | prompt | auto — open worktrees as herdr workspaces',
+  },
+  {
+    key: 'GEET_WORKTREE_LIST_SIZE',
+    label: 'Visible list rows',
+    placeholder: '10',
+    hint: 'rows shown in selection lists; 0 shows all',
   },
 ];
 
@@ -170,6 +179,11 @@ const herdrRaw = (process.env.GEET_HERDR ?? '').trim().toLowerCase();
 
 /** 'off' | 'prompt' | 'auto' — unrecognised values fall back to 'off'. */
 export const HERDR_MODE = herdrRaw === 'prompt' || herdrRaw === 'auto' ? herdrRaw : 'off';
+
+const listSizeRaw = Number.parseInt(process.env.GEET_WORKTREE_LIST_SIZE ?? '', 10);
+
+/** Rows visible in selection lists; 0 means show everything. Invalid values fall back to 10. */
+export const WORKTREE_LIST_SIZE = Number.isInteger(listSizeRaw) && listSizeRaw >= 0 ? listSizeRaw : 10;
 
 // ── Project map (~/.geet/project-map.json) ────────────────────────────────────
 

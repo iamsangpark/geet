@@ -315,6 +315,7 @@ Config values are loaded from the following sources, lowest to highest priority:
 | `GEET_BRANCH_PREFIX` | *(none)* | Prefix prepended to branch names created by `worktree new`. |
 | `GEET_SYMLINK_PATHS` | *(none)* | Comma-separated relative paths symlinked from the main worktree into each new worktree. |
 | `GEET_HERDR` | `off` | `off`, `prompt` or `auto` — open worktrees as [herdr](https://herdr.dev) workspaces. See [herdr integration](#herdr-integration). |
+| `GEET_WORKTREE_LIST_SIZE` | `10` | Rows visible in searchable selection lists (worktrees, branches). `0` shows every item instead of a scrolling list. Press ESC to cancel a selection. |
 
 ```sh
 # ~/.geet/config
@@ -322,6 +323,7 @@ GEET_WORKTREE_BASE=~/dev/worktrees
 GEET_BRANCH_PREFIX=sp/
 GEET_SYMLINK_PATHS=.env.local,node_modules
 GEET_HERDR=prompt
+GEET_WORKTREE_LIST_SIZE=10
 ```
 
 Use `geet config global|local|set` to edit these interactively.
