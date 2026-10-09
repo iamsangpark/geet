@@ -91,7 +91,7 @@ geet sts list
 
 Manage git worktrees. Running `geet worktree` with no subcommand is the same as `geet worktree list`.
 
-Subcommands: `new`, `add`, `list`, `remove`, `prune`, `copy-path`, `rename`, `link-fix`, `pull`, `merge`
+Subcommands: `new`, `add`, `list`, `remove`, `prune`, `rename`, `link-fix`, `pull`, `merge`
 
 After a worktree is created (`new` / `add`), geet:
 
@@ -177,16 +177,6 @@ geet wt prune
 
 ---
 
-### `geet worktree copy-path`
-
-Copy the path of the worktree you're currently in to the clipboard.
-
-```sh
-geet wt copy-path
-```
-
----
-
 ### `geet worktree rename`
 
 Interactively rename a worktree: moves its folder and switches it to a new branch, then offers to delete the old branch. Prompts are pre-filled from the current path.
@@ -228,6 +218,24 @@ Select a worktree branch to merge into the **current branch**. If you have uncom
 ```sh
 geet wt merge
 geet wt merge -p
+```
+
+---
+
+### `geet copy` · alias: `cp`
+
+Copy information about the current repo to the clipboard. Subcommands: `path` (alias `worktree`), `jira`, `branch`.
+
+| Command | Copies |
+|---|---|
+| `geet copy path` / `geet copy worktree` | The folder path of the worktree you're in (replaces the old `geet wt copy-path`) |
+| `geet copy jira` | The Jira ticket key (e.g. `PROJ-1234`), found in the current branch name or, failing that, the worktree folder name |
+| `geet copy branch` | The current branch name |
+
+```sh
+geet cp path
+geet cp jira
+geet cp branch
 ```
 
 ---
@@ -354,6 +362,7 @@ src/
     ├── checkout.js
     ├── stash.js
     ├── worktree.js
+    ├── copy.js
     ├── config.js
     └── mergeRelease.js
 ```
