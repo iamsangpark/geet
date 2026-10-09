@@ -242,7 +242,11 @@ geet cp branch
 
 ### `geet config` · alias: `cfg`
 
-Manage geet configuration and init scripts. Subcommands: `global`, `local`, `set`, `init-script`, `project-map`.
+Manage geet configuration and init scripts. Subcommands: `list`, `global`, `local`, `set`, `init-script`, `project-map`.
+
+#### `geet config list`
+
+List config values currently set, with the file each comes from. Pass `-a` / `--all` to list every option (set or not) in separate `LOCAL` (`.env.local`) and `REPO` (`.env`) sections, followed by `GLOBAL` (`~/.geet/config`).
 
 #### `geet config global`
 
