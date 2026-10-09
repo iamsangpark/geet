@@ -202,15 +202,16 @@ export async function promptSelectWorktreeForRemove(worktrees) {
 }
 
 /**
- * Shown before `worktree remove` when the worktree has changes that block removal.
- * @returns {Promise<'reset' | 'cancel'>}
+ * Shown before `worktree remove` / `prune` when a worktree has changes that block removal.
+ * @param {string} branch
+ * @returns {Promise<'reset' | 'skip'>}
  */
-export async function promptWorktreeChangesForRemove() {
+export async function promptWorktreeChangesForRemove(branch) {
   const action = await p.select({
-    message: 'This worktree has changes that prevent removal. How should we proceed?',
+    message: `"${branch}" has changes that prevent removal. How should we proceed?`,
     options: [
       { value: 'reset', label: 'Reset and remove', hint: 'discards changes and deletes untracked files' },
-      { value: 'cancel', label: 'Cancel' },
+      { value: 'skip', label: 'Skip', hint: 'keep this worktree' },
     ],
   });
   return guardCancel(action);

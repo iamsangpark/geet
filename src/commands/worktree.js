@@ -197,36 +197,13 @@ export async function worktreeRemoveAction(_options) {
   // Look up herdr workspaces before removal, while herdr still lists the checkout
   const openWorkspaces = await openHerdrWorkspaces(all.find((w) => w.isMain)?.path);
 
-  // Ask everything up front so nothing destructive happens before the last answer
-  const workspaceId = openWorkspaces.get(path.resolve(selected.path));
-  const closable = workspaceId && workspaceId !== process.env.HERDR_WORKSPACE_ID;
-  const closeWorkspace = closable
-    ? await promptConfirm('A herdr workspace is open for this worktree. Close it too?')
-    : false;
-
-  const changes = await getWorktreeChanges(selected.path);
-  const needsReset = changes.length > 0;
-  if (needsReset) {
-    logWarn(`Uncommitted changes in ${selected.path}:\n${changes.join('\n')}`);
-    if ((await promptWorktreeChangesForRemove()) === 'cancel') {
-      outro('Nothing removed.');
-      return;
-    }
-
-    const sReset = spinner();
-    sReset.start('Resetting worktree...');
-    await resetWorktree(selected.path);
-    sReset.stop('Worktree reset.');
+  const [plan] = await planWorktreeRemovals([selected], openWorkspaces);
+  if (!plan) {
+    outro('Nothing removed.');
+    return;
   }
 
-  const s2 = spinner();
-  s2.start(`Removing worktree "${selected.branch}"...`);
-  await removeWorktree(selected.path);
-  s2.stop('Worktree removed.');
-
-  if (closeWorkspace) {
-    await closeHerdrWorkspaceFor(selected.path, openWorkspaces);
-  }
+  await executeWorktreeRemoval(plan, openWorkspaces);
 
   outro(`Removed: ${selected.path}`);
 }
@@ -268,21 +245,22 @@ export async function worktreePruneAction(_options) {
 
   const openWorkspaces = await openHerdrWorkspaces(all.find((w) => w.isMain)?.path);
 
-  const s3 = spinner();
+  const plans = await planWorktreeRemovals(toRemove, openWorkspaces);
+  if (plans.length === 0) {
+    outro('Nothing removed.');
+    return;
+  }
+
   const failed = [];
-  for (const w of toRemove) {
-    s3.start(`Removing worktree "${w.branch}"...`);
+  for (const plan of plans) {
     try {
-      await removeWorktree(w.path);
-      s3.stop(`Removed: ${w.branch}`);
-      await closeHerdrWorkspaceFor(w.path, openWorkspaces);
+      await executeWorktreeRemoval(plan, openWorkspaces);
     } catch (err) {
-      s3.stop(`Failed to remove: ${w.branch}`);
-      failed.push({ worktree: w, message: err.gitMessage || err.message });
+      failed.push({ worktree: plan.worktree, message: err.gitMessage || err.message });
     }
   }
 
-  const removedCount = toRemove.length - failed.length;
+  const removedCount = plans.length - failed.length;
   if (removedCount > 0) {
     logInfo(`Pruned ${removedCount} worktree(s).`);
   }
@@ -296,7 +274,7 @@ export async function worktreePruneAction(_options) {
     return;
   }
 
-  outro(`Pruned ${toRemove.length} worktree(s).`);
+  outro(`Pruned ${plans.length} worktree(s).`);
 }
 
 // ── worktree rename ───────────────────────────────────────────────────────────
@@ -563,6 +541,70 @@ async function openHerdrWorkspaces(mainWorktreePath) {
     // herdr unreachable — treat as "nothing open"
   }
   return open;
+}
+
+/**
+ * Interactive half of removal, shared by `remove` and `prune`. Asks everything
+ * up front so nothing destructive happens before the last answer:
+ *   - once: whether to close the open herdr workspaces (never geet's own)
+ *   - per worktree with blocking changes: list them, then reset or skip
+ *
+ * @param {Array<{ path: string, branch: string }>} worktrees
+ * @param {Map<string, string>} openWorkspaces
+ * @returns {Promise<Array<{ worktree: object, closeWorkspace: boolean, reset: boolean }>>}
+ *   plans for the worktrees that should be removed (skipped ones are omitted)
+ */
+async function planWorktreeRemovals(worktrees, openWorkspaces) {
+  const closableCount = worktrees.filter((w) => {
+    const id = openWorkspaces.get(path.resolve(w.path));
+    return id && id !== process.env.HERDR_WORKSPACE_ID;
+  }).length;
+
+  let closeWorkspaces = false;
+  if (closableCount === 1) {
+    closeWorkspaces = await promptConfirm('A herdr workspace is open for this worktree. Close it too?');
+  } else if (closableCount > 1) {
+    closeWorkspaces = await promptConfirm(`${closableCount} of these worktrees have an open herdr workspace. Close them too?`);
+  }
+
+  const plans = [];
+  for (const worktree of worktrees) {
+    const changes = await getWorktreeChanges(worktree.path);
+    const reset = changes.length > 0;
+    if (reset) {
+      logWarn(`Uncommitted changes in ${worktree.path}:\n${changes.join('\n')}`);
+      if ((await promptWorktreeChangesForRemove(worktree.branch)) === 'skip') continue;
+    }
+    plans.push({ worktree, closeWorkspace: closeWorkspaces, reset });
+  }
+  return plans;
+}
+
+/**
+ * Executing half of removal: reset (if planned), remove, then close the herdr
+ * workspace (if planned). Throws if git refuses to reset or remove.
+ */
+async function executeWorktreeRemoval({ worktree, closeWorkspace, reset }, openWorkspaces) {
+  if (reset) {
+    const sReset = spinner();
+    sReset.start(`Resetting "${worktree.branch}"...`);
+    await resetWorktree(worktree.path);
+    sReset.stop('Worktree reset.');
+  }
+
+  const s = spinner();
+  s.start(`Removing worktree "${worktree.branch}"...`);
+  try {
+    await removeWorktree(worktree.path);
+  } catch (err) {
+    s.stop(`Failed to remove: ${worktree.branch}`);
+    throw err;
+  }
+  s.stop(`Removed: ${worktree.branch}`);
+
+  if (closeWorkspace) {
+    await closeHerdrWorkspaceFor(worktree.path, openWorkspaces);
+  }
 }
 
 /**
