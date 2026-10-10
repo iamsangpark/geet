@@ -12,12 +12,6 @@ import { logInfo, logError, logSuccess } from '../../../prompts/common.ts';
  * Streams output into a rolling 4-line window using ANSI cursor control.
  */
 async function runScript(scriptPath: string, newWorktreeDir: string) {
-  try {
-    await access(scriptPath, constants.X_OK);
-  } catch {
-    return; // script doesn't exist or isn't executable — skip silently
-  }
-
   logInfo(`Running init script: ${scriptPath}`);
 
   const TAIL = 4;
@@ -63,13 +57,32 @@ async function runScript(scriptPath: string, newWorktreeDir: string) {
 }
 
 /**
- * Runs ~/.geet/init/default.sh (if present) then ~/.geet/init/<repo-name>.sh
- * (if present) in the newly created worktree directory.
+ * Init scripts that apply to a repo, in run order: ~/.geet/init/default.sh then
+ * ~/.geet/init/<repo-name>.sh. Scripts that are missing or not executable are left out.
  */
-export async function runInitScript(mainWorktreePath: string, newWorktreeDir: string) {
+export async function findInitScripts(mainWorktreePath: string): Promise<string[]> {
   const initDir = path.join(os.homedir(), '.geet', 'init');
-  await runScript(path.join(initDir, 'default.sh'), newWorktreeDir);
-
   const repoName = path.basename(mainWorktreePath);
-  await runScript(path.join(initDir, `${repoName}.sh`), newWorktreeDir);
+  const found: string[] = [];
+  for (const script of [path.join(initDir, 'default.sh'), path.join(initDir, `${repoName}.sh`)]) {
+    try {
+      await access(script, constants.X_OK);
+      found.push(script);
+    } catch {
+      // doesn't exist or isn't executable — skip silently
+    }
+  }
+  return found;
+}
+
+/** Runs the given init scripts in order, in the worktree directory, in this terminal. */
+export async function runInitScripts(scripts: string[], newWorktreeDir: string) {
+  for (const script of scripts) {
+    await runScript(script, newWorktreeDir);
+  }
+}
+
+/** One shell command line that runs the scripts in order, for typing into another terminal. */
+export function initScriptsCommand(scripts: string[]): string {
+  return scripts.map((s) => `'${s.replace(/'/g, `'\\''`)}'`).join('; ');
 }

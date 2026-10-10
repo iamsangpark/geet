@@ -18,7 +18,7 @@ import {
 } from '../../prompts/worktree.ts';
 import { buildWorktreeNames } from './utils/naming.ts';
 import { linkPaths } from './utils/symlinks.ts';
-import { runInitScript } from './utils/initScripts.ts';
+import { findInitScripts } from './utils/initScripts.ts';
 import { openWorktree } from './utils/openWorktree.ts';
 
 interface CreateOptions {
@@ -104,8 +104,9 @@ export function worktreeAddAction(options: CreateOptions) {
 /**
  * After a worktree is created:
  *   1. Create configured symlinks from the main worktree
- *   2. Run ~/.geet/init/default.sh (if executable), then ~/.geet/init/<repo-name>.sh (if executable)
- *   3. Open the worktree (herdr workspace or an interactive shell)
+ *   2. Open the worktree (herdr workspace or an interactive shell), running
+ *      ~/.geet/init/default.sh then ~/.geet/init/<repo-name>.sh (each if executable)
+ *      inside the new herdr workspace, or in this terminal before the shell
  */
 async function postWorktreeCreate(dir: string, { skipInit = false } = {}) {
   const mainWorktree = await getMainWorktree();
@@ -114,9 +115,7 @@ async function postWorktreeCreate(dir: string, { skipInit = false } = {}) {
     await linkPaths(mainWorktree.path, dir, SYMLINK_PATHS);
   }
 
-  if (mainWorktree && !skipInit) {
-    await runInitScript(mainWorktree.path, dir);
-  }
+  const initScripts = mainWorktree && !skipInit ? await findInitScripts(mainWorktree.path) : [];
 
-  await openWorktree(dir, mainWorktree?.path);
+  await openWorktree(dir, mainWorktree?.path, { initScripts });
 }

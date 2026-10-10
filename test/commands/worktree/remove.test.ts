@@ -26,13 +26,23 @@ vi.mock('../../../src/commands/worktree/utils/openWorktree.ts', () => ({
 }));
 vi.mock('../../../src/commands/worktree/utils/herdr.ts', () => ({
   closeHerdrWorkspace: vi.fn(),
+  focusHerdrWorkspace: vi.fn(),
+  listHerdrWorkspaces: vi.fn(),
+  herdrMode: vi.fn(),
 }));
+vi.mock('../../../src/commands/worktree/utils/shell.ts', () => ({ spawnShellIn: vi.fn() }));
 
 import {
   worktreePruneAction,
   worktreeRemoveAction,
 } from '../../../src/commands/worktree/remove.ts';
-import { closeHerdrWorkspace } from '../../../src/commands/worktree/utils/herdr.ts';
+import {
+  closeHerdrWorkspace,
+  focusHerdrWorkspace,
+  herdrMode,
+  listHerdrWorkspaces,
+} from '../../../src/commands/worktree/utils/herdr.ts';
+import { spawnShellIn } from '../../../src/commands/worktree/utils/shell.ts';
 import { openHerdrWorkspaces } from '../../../src/commands/worktree/utils/openWorktree.ts';
 import { logError, logInfo, logWarn, outro, promptConfirm } from '../../../src/prompts/common.ts';
 import {
@@ -158,6 +168,47 @@ describe('worktree remove', () => {
     expect(lastQuestion).toBeLessThan(firstDestructive);
   });
 
+  describe('--path / --branch', () => {
+    it('removes the worktree at --path without showing the selection prompt', async () => {
+      await worktreeRemoveAction({ path: '/wt/b' });
+      expect(promptMultiSelectWorktrees).not.toHaveBeenCalled();
+      expect(events).toEqual(['remove /wt/b']);
+      expect(outro).toHaveBeenCalledWith('Removed 1 worktree(s).');
+    });
+
+    it('removes the worktree whose branch matches --branch', async () => {
+      vi.mocked(listWorktrees).mockResolvedValue([main, wt('a', 'feat/a'), b]);
+      await worktreeRemoveAction({ branch: 'feat/a' });
+      expect(events).toEqual(['remove /wt/a']);
+    });
+
+    it('requires --path and --branch to agree when both are given', async () => {
+      await expect(worktreeRemoveAction({ path: '/wt/a', branch: 'b' })).rejects.toThrow(
+        'No worktree found with path "/wt/a" and branch "b".',
+      );
+      expect(removeWorktree).not.toHaveBeenCalled();
+    });
+
+    it('errors when nothing matches', async () => {
+      await expect(worktreeRemoveAction({ branch: 'nope' })).rejects.toThrow(
+        'No worktree found with branch "nope".',
+      );
+    });
+
+    it('refuses to remove the main worktree', async () => {
+      await expect(worktreeRemoveAction({ path: '/repo' })).rejects.toThrow(
+        'Cannot remove the main worktree (/repo).',
+      );
+      expect(removeWorktree).not.toHaveBeenCalled();
+    });
+
+    it('still asks before resetting a dirty worktree', async () => {
+      vi.mocked(getWorktreeChanges).mockResolvedValue([' M x']);
+      await worktreeRemoveAction({ path: '/wt/a' });
+      expect(events).toEqual(['changes prompt: a', 'reset /wt/a', 'remove /wt/a']);
+    });
+  });
+
   describe('herdr workspaces', () => {
     it('asks once for a single open workspace and closes it after removal', async () => {
       vi.mocked(openHerdrWorkspaces).mockResolvedValue(new Map([['/wt/a', 'ws-a']]));
@@ -247,6 +298,85 @@ describe('worktree remove', () => {
       vi.mocked(removeWorktree).mockRejectedValue(new GeetError('locked'));
       await worktreeRemoveAction();
       expect(closeHerdrWorkspace).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('removing the worktree geet is running in', () => {
+  beforeEach(() => {
+    vi.spyOn(process, 'cwd').mockReturnValue('/wt/a/src');
+    vi.spyOn(process, 'chdir').mockImplementation((dir) => void events.push(`chdir ${dir}`));
+    vi.mocked(promptMultiSelectWorktrees).mockImplementation(async () => [a, b]);
+    vi.mocked(herdrMode).mockReturnValue('off');
+    vi.mocked(focusHerdrWorkspace).mockImplementation(
+      async (id) => void events.push(`focus workspace ${id}`),
+    );
+    vi.mocked(listHerdrWorkspaces).mockResolvedValue([]);
+  });
+
+  it('steps out, removes it last, then opens a shell in the base worktree outside herdr', async () => {
+    await worktreeRemoveAction();
+    expect(events).toEqual(['remove /wt/b', 'chdir /repo', 'remove /wt/a']);
+    expect(spawnShellIn).toHaveBeenCalledWith('/repo');
+  });
+
+  it('does nothing special when removing a different worktree', async () => {
+    vi.mocked(promptMultiSelectWorktrees).mockResolvedValue([b]);
+    await worktreeRemoveAction();
+    expect(process.chdir).not.toHaveBeenCalled();
+    expect(spawnShellIn).not.toHaveBeenCalled();
+  });
+
+  it('does not leave when removal of the current worktree fails', async () => {
+    vi.mocked(removeWorktree).mockRejectedValue(new GeetError('locked'));
+    await worktreeRemoveAction();
+    expect(spawnShellIn).not.toHaveBeenCalled();
+  });
+
+  describe('inside herdr', () => {
+    beforeEach(() => {
+      vi.mocked(herdrMode).mockReturnValue('auto');
+      vi.stubEnv('HERDR_WORKSPACE_ID', 'ws-a');
+      vi.mocked(closeHerdrWorkspace).mockImplementation(
+        async (id) => void events.push(`close workspace ${id}`),
+      );
+    });
+
+    it('switches to the base worktree workspace and closes the current one', async () => {
+      vi.mocked(openHerdrWorkspaces).mockResolvedValue(
+        new Map([
+          ['/repo', 'ws-main'],
+          ['/wt/a', 'ws-a'],
+        ]),
+      );
+      await worktreeRemoveAction();
+      expect(events.slice(-3)).toEqual([
+        'remove /wt/a',
+        'focus workspace ws-main',
+        'close workspace ws-a',
+      ]);
+      expect(spawnShellIn).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the first other workspace when the base is not open', async () => {
+      vi.mocked(openHerdrWorkspaces).mockResolvedValue(new Map([['/wt/a', 'ws-a']]));
+      vi.mocked(listHerdrWorkspaces).mockResolvedValue(['ws-a', 'ws-x', 'ws-y']);
+      await worktreeRemoveAction();
+      expect(events.slice(-2)).toEqual(['focus workspace ws-x', 'close workspace ws-a']);
+    });
+
+    it('opens a shell in the base worktree when there are no other workspaces', async () => {
+      vi.mocked(listHerdrWorkspaces).mockResolvedValue(['ws-a']);
+      await worktreeRemoveAction();
+      expect(focusHerdrWorkspace).not.toHaveBeenCalled();
+      expect(closeHerdrWorkspace).not.toHaveBeenCalled();
+      expect(spawnShellIn).toHaveBeenCalledWith('/repo');
+    });
+
+    it('opens a shell in the base worktree when herdr fails', async () => {
+      vi.mocked(listHerdrWorkspaces).mockRejectedValue(new GeetError('herdr: down'));
+      await worktreeRemoveAction();
+      expect(spawnShellIn).toHaveBeenCalledWith('/repo');
     });
   });
 });
