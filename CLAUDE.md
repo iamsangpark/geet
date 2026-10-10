@@ -36,8 +36,10 @@ src/
 └── commands/
     ├── checkout.ts
     ├── stash.ts
-    ├── worktree.ts
-    ├── worktree/utils/herdr.ts  # herdr CLI calls (via execa) + HERDR_ENV detection
+    ├── worktree/
+    │   ├── index.ts, create.ts, list.ts, remove.ts, rename.ts, linkFix.ts, pullMerge.ts
+    │   └── utils/   # herdr.ts (herdr CLI calls via execa + HERDR_ENV detection), openWorktree, shell,
+    │                # initScripts, symlinks, naming, loadWorktrees
     ├── copy.ts
     ├── config.ts
     └── mergeRelease.ts

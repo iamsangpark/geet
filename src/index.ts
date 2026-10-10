@@ -51,7 +51,7 @@ import {
   worktreeLinkFixAction,
   worktreePullAction,
   worktreeMergeAction,
-} from './commands/worktree.ts';
+} from './commands/worktree/index.ts';
 import { mergeReleaseAction } from './commands/mergeRelease.ts';
 import { copyPathAction, copyJiraAction, copyBranchAction } from './commands/copy.ts';
 import {
