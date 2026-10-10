@@ -7,8 +7,8 @@
  */
 
 import path from 'path';
-import { listWorktrees, getCurrentBranch } from '../gitUtils.ts';
-import { GeetError } from '../errors.ts';
+import { listWorktrees, getCurrentBranch } from '../utils/git.ts';
+import { GeetError } from '../utils/errors.ts';
 import { intro, outro, logSuccess } from '../prompts.ts';
 
 const JIRA_KEY = /[A-Z][A-Z0-9]*-\d+/;

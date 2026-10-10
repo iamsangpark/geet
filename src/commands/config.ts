@@ -23,8 +23,8 @@ import {
   readProjectMap,
   writeProjectMap,
 } from '../config.ts';
-import { GeetError, errorCode, errorMessage } from '../errors.ts';
-import { listWorktrees } from '../gitUtils.ts';
+import { GeetError, errorCode, errorMessage } from '../utils/errors.ts';
+import { listWorktrees } from '../utils/git.ts';
 import {
   intro,
   outro,

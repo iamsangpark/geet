@@ -13,7 +13,7 @@ import {
   stashPopIndex,
   listStashes,
   gitAddAll,
-} from '../gitUtils.ts';
+} from '../utils/git.ts';
 
 import {
   intro,

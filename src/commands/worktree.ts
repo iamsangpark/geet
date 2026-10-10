@@ -14,7 +14,7 @@ import { symlink, mkdir, access, unlink } from 'fs/promises';
 import { constants } from 'fs';
 import { spawn } from 'child_process';
 import { execa } from 'execa';
-import { GeetError, errorCode, errorMessage, userMessage } from '../errors.ts';
+import { GeetError, errorCode, errorMessage, userMessage } from '../utils/errors.ts';
 import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS, readProjectMap } from '../config.ts';
 import {
   type Worktree,
@@ -35,13 +35,13 @@ import {
   stashSave,
   pullBranch,
   mergeBranch,
-} from '../gitUtils.ts';
+} from '../utils/git.ts';
 import {
   herdrMode,
   listHerdrWorktrees,
   openHerdrWorktree,
   closeHerdrWorkspace,
-} from '../herdrUtils.ts';
+} from './worktree/utils/herdr.ts';
 import {
   intro,
   outro,

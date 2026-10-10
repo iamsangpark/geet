@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GeetError, errorCode, errorMessage, userMessage } from '../src/errors.ts';
+import { GeetError, errorCode, errorMessage, userMessage } from '../../src/utils/errors.ts';
 
 describe('GeetError', () => {
   it('mirrors its message into gitMessage', () => {

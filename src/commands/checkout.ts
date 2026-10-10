@@ -11,7 +11,7 @@ import {
   checkoutForce,
   stashSave,
   gitAddAll,
-} from '../gitUtils.ts';
+} from '../utils/git.ts';
 
 import {
   intro,

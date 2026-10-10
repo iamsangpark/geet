@@ -38,7 +38,7 @@ import path from 'path';
 import os from 'os';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { config, parse } from 'dotenv';
-import { errorCode } from './errors.ts';
+import { errorCode } from './utils/errors.ts';
 
 export type HerdrMode = 'off' | 'prompt' | 'auto';
 

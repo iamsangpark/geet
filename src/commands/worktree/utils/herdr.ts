@@ -6,8 +6,8 @@
  */
 
 import { execa } from 'execa';
-import { HERDR_MODE, type HerdrMode } from './config.ts';
-import { GeetError, errorCode, errorMessage } from './errors.ts';
+import { HERDR_MODE, type HerdrMode } from '../../../config.ts';
+import { GeetError, errorCode, errorMessage } from '../../../utils/errors.ts';
 
 // ── Detection ─────────────────────────────────────────────────────────────────
 

@@ -25,7 +25,7 @@
 
 import { createRequire } from 'module';
 import { Command } from 'commander';
-import { GeetError, userMessage } from './errors.ts';
+import { GeetError, userMessage } from './utils/errors.ts';
 
 // ── omelette (CJS-only, must use createRequire in ESM) ────────────────────────
 const require = createRequire(import.meta.url);

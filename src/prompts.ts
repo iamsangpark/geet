@@ -12,7 +12,7 @@ import path from 'path';
 import * as p from '@clack/prompts';
 import search from '@inquirer/search';
 import { CONFIG_KEYS, GLOBAL_CONFIG_PATH, WORKTREE_LIST_SIZE } from './config.ts';
-import type { Stash, Worktree } from './gitUtils.ts';
+import type { Stash, Worktree } from './utils/git.ts';
 
 /** A worktree, optionally annotated with extra hint strings. */
 export type WorktreeOption = Worktree & { decorators?: string[] };

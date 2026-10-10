@@ -11,7 +11,7 @@ import {
   mergeBranch,
   parseGitError,
   stashSave,
-} from '../src/gitUtils.ts';
+} from '../../src/utils/git.ts';
 
 const execaMock = vi.mocked(execa) as unknown as ReturnType<typeof vi.fn>;
 

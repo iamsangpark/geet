@@ -10,7 +10,13 @@
  *   5. Print git diff vs origin/<dest> so the user can review before pushing
  */
 
-import { fetchAll, pullBranch, checkoutBranch, mergeBranch, getDiffVsOrigin } from '../gitUtils.ts';
+import {
+  fetchAll,
+  pullBranch,
+  checkoutBranch,
+  mergeBranch,
+  getDiffVsOrigin,
+} from '../utils/git.ts';
 
 import { intro, outro, logInfo, logWarn, spinner } from '../prompts.ts';
 
