@@ -114,14 +114,15 @@ async function worktreeCreateImpl(introText, options) {
       dir = path.join(WORKTREE_BASE, projectName, folderName);
       branch = `${BRANCH_PREFIX}${folderName}`;
     }
-
-    logInfo(`Worktree path: ${dir}`);
-    logInfo(`Branch:        ${branch}`);
   }
 
   const resolvedDir = path.resolve(dir);
+  // Keep the spinner message short: clack redraws it in place, and a line wider
+  // than the terminal wraps, leaving a repeated copy per animation frame.
+  logInfo(`Worktree path: ${resolvedDir}`);
+  logInfo(`Branch:        ${branch}`);
   const s = spinner();
-  s.start(`Adding worktree at "${resolvedDir}" for branch "${branch}"...`);
+  s.start('Adding worktree...');
   await addWorktree(branch, resolvedDir);
   s.stop('Worktree created.');
 
