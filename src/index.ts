@@ -5,7 +5,8 @@
  *
  * Architecture:
  *   - commander   : subcommand registration and argument parsing
- *   - omelette    : shell autocompletion (bash/zsh)
+ *                   (each command module exports its own register*Command)
+ *   - omelette    : shell autocompletion (bash/zsh), derived from the commander tree
  *                   omelette is CJS-only, so we import it via createRequire
  *
  * ── Shell Autocompletion Setup ─────────────────────────────────────────────
@@ -25,89 +26,74 @@
 
 import { createRequire } from 'module';
 import { Command } from 'commander';
-import { GeetError, userMessage } from './utils/errors.ts';
+import { userMessage } from './utils/errors.ts';
+import { registerCheckoutCommand } from './commands/checkout.ts';
+import { registerStashCommand } from './commands/stash.ts';
+import { registerWorktreeCommand } from './commands/worktree/index.ts';
+import { registerCopyCommand } from './commands/copy.ts';
+import { registerConfigCommand } from './commands/config/index.ts';
+import { registerMergeReleaseCommand } from './commands/mergeRelease.ts';
 
-// ── omelette (CJS-only, must use createRequire in ESM) ────────────────────────
+// ── CJS-only dependencies (must use createRequire in ESM) ─────────────────────
 const require = createRequire(import.meta.url);
 const omelette = require('omelette') as (template: string) => Completion;
+// Resolves to the repo's package.json from both src/ and dist/
+const { version } = require('../package.json') as { version: string };
 
 interface Completion {
-  on(event: string, handler: (ctx: { reply: (items: string[]) => void }) => void): void;
+  on(
+    event: string,
+    handler: (ctx: { before: string; reply: (items: string[]) => void }) => void,
+  ): void;
   init(): void;
   setupShellInitFile(): void;
   cleanupShellInitFile(): void;
 }
 
-// ── Command action imports ────────────────────────────────────────────────────
-import { checkoutAction } from './commands/checkout.ts';
-import { stashAction, stashPopAction, stashListPopAction } from './commands/stash.ts';
-import {
-  worktreeNewAction,
-  worktreeAddAction,
-  worktreeListAction,
-  worktreeRemoveAction,
-  worktreePruneAction,
-  worktreeRenameAction,
-  worktreeLinkFixAction,
-  worktreePullAction,
-  worktreeMergeAction,
-} from './commands/worktree/index.ts';
-import { mergeReleaseAction } from './commands/mergeRelease.ts';
-import { copyPathAction, copyJiraAction, copyBranchAction } from './commands/copy.ts';
-import {
-  configListAction,
-  configGlobalAction,
-  configLocalAction,
-  configSetAction,
-  configInitScriptAction,
-  configProjectMapAction,
-} from './commands/config/index.ts';
+// ── Commander Program ─────────────────────────────────────────────────────────
 
-// ── Autocompletion Setup ──────────────────────────────────────────────────────
+const program = new Command();
+
+program
+  .name('geet')
+  .description('Personal git productivity CLI')
+  .version(version)
+  .addHelpText(
+    'after',
+    `
+Autocompletion:
+  geet --setup-completion     Install tab completion for bash/zsh
+  geet --cleanup-completion   Remove tab completion
+`,
+  );
+
+registerCheckoutCommand(program);
+registerStashCommand(program);
+registerWorktreeCommand(program);
+registerCopyCommand(program);
+registerConfigCommand(program);
+registerMergeReleaseCommand(program);
+
+// ── Autocompletion ────────────────────────────────────────────────────────────
+// Derived from the commander tree: `geet <command>` completes command names and
+// aliases; `geet <command> <sub>` completes that command's subcommands. omelette
+// emits `$<n>` for the n-th word and passes the previous word as `before`.
 
 const completion = omelette('geet <command>');
 
-// Top-level subcommand completions
-completion.on('command', ({ reply }) => {
-  reply([
-    'checkout',
-    'co',
-    'stash',
-    'sts',
-    'worktree',
-    'wt',
-    'merge-release',
-    'config',
-    'cfg',
-    'copy',
-    'cp',
-  ]);
-});
+const names = (cmd: Command) => cmd.commands.flatMap((c) => [c.name(), ...c.aliases()]);
 
-// Subcommand completions for `geet copy <sub>`
-completion.on('copy', ({ reply }) => {
-  reply(['path', 'worktree', 'jira', 'branch']);
-});
+completion.on('command', ({ reply }) => reply(names(program)));
 
-// Subcommand completions for `geet stash <sub>`
-completion.on('stash', ({ reply }) => {
-  reply(['pop', 'list']);
-});
-
-// Subcommand completions for `geet worktree <sub>`
-completion.on('worktree', ({ reply }) => {
-  reply(['new', 'add', 'list', 'remove', 'prune', 'rename', 'link-fix', 'pull', 'merge']);
-});
-
-// Subcommand completions for `geet config <sub>`
-completion.on('config', ({ reply }) => {
-  reply(['list', 'global', 'local', 'set', 'init-script', 'project-map']);
+completion.on('$2', ({ before, reply }) => {
+  const cmd = program.commands.find((c) => c.name() === before || c.aliases().includes(before));
+  reply(cmd ? names(cmd) : []);
 });
 
 // omelette.init() must be called before program.parse().
 // When Tab is pressed, the shell sets COMP_LINE / COMP_POINT, omelette detects
-// those env vars in init(), writes completions to stdout, and exits — so the
-// commander setup below never runs during a completion call.
+// those env vars in init(), writes completions to stdout, and exits — so
+// commander never runs during a completion call.
 completion.init();
 
 // ── Handle completion setup flags (before commander, to avoid conflicts) ──────
@@ -123,198 +109,6 @@ if (process.argv.includes('--cleanup-completion')) {
   console.log('✓ Shell completion removed.');
   process.exit(0);
 }
-
-// ── Commander Program ─────────────────────────────────────────────────────────
-
-const program = new Command();
-
-program
-  .name('geet')
-  .description('Personal git productivity CLI')
-  .version('1.0.0')
-  .addHelpText(
-    'after',
-    `
-Autocompletion:
-  geet --setup-completion     Install tab completion for bash/zsh
-  geet --cleanup-completion   Remove tab completion
-`,
-  );
-
-// ── checkout ──────────────────────────────────────────────────────────────────
-
-program
-  .command('checkout [branch]')
-  .alias('co')
-  .description('Checkout a branch with uncommitted-change safety guard')
-  .action(checkoutAction);
-
-// ── stash (with nested subcommands) ───────────────────────────────────────────
-//
-// commander resolves subcommand names *before* positional args on the parent,
-// so `geet stash pop` → stashPopAction, `geet stash "my msg"` → stashAction("my msg").
-
-const stashCmd = program
-  .command('stash')
-  .alias('sts')
-  .description('Stash changes, prompting for a message  (subcommands: pop, list)')
-  .option('-m, --message <msg>', 'Stash message (skips the prompt)')
-  .option('-k, --keep-untracked', 'Leave untracked files in the working tree (do not stash them)')
-  .action(stashAction);
-
-stashCmd
-  .command('pop')
-  .description('Pop the most recent stash (with uncommitted-change guard)')
-  .action(stashPopAction);
-
-stashCmd
-  .command('list')
-  .description('Interactively pick a stash entry to pop')
-  .action(stashListPopAction);
-
-// ── worktree ──────────────────────────────────────────────────────────────────
-
-const worktreeCmd = program
-  .command('worktree')
-  .alias('wt')
-  .description(
-    'Manage git worktrees  (subcommands: new, add, list, remove, prune, rename, link-fix, pull, merge)',
-  )
-  .action((_options, cmd) => {
-    if (cmd.args.length > 0) {
-      throw new GeetError(
-        `Unknown subcommand: "${cmd.args[0]}". Run "geet worktree --help" to see available subcommands.`,
-      );
-    }
-    return worktreeListAction();
-  });
-
-worktreeCmd
-  .command('new')
-  .description(
-    'Interactively create a new branch and worktree (use -f and -b together to skip prompts)',
-  )
-  .option('-f, --folder <dir>', 'Target directory for the new worktree')
-  .option('-b, --branch <branch>', 'Branch name for the new worktree')
-  .option('--no-init', 'Skip running init scripts after worktree creation')
-  .action(worktreeNewAction);
-
-worktreeCmd
-  .command('add')
-  .description('Check out an existing local branch as a new worktree')
-  .option('--no-init', 'Skip running init scripts after worktree creation')
-  .action(worktreeAddAction);
-
-worktreeCmd
-  .command('list')
-  .description(
-    'List worktrees; copies path to clipboard and opens a shell (or herdr workspace when GEET_HERDR is enabled) in selection',
-  )
-  .action(worktreeListAction);
-
-worktreeCmd
-  .command('remove')
-  .description('Interactively select a worktree to remove')
-  .action(worktreeRemoveAction);
-
-worktreeCmd
-  .command('prune')
-  .description('Fetch from origin and remove worktrees whose remote branches are closed')
-  .action(worktreePruneAction);
-
-worktreeCmd
-  .command('rename')
-  .description('Interactively rename a worktree: move its folder and rename its branch')
-  .action(worktreeRenameAction);
-
-worktreeCmd
-  .command('link-fix')
-  .description('Re-link GEET_SYMLINK_PATHS from the main worktree into a selected worktree')
-  .action(worktreeLinkFixAction);
-
-worktreeCmd
-  .command('pull')
-  .description('Interactively select a worktree and pull the latest changes for its branch')
-  .action(worktreePullAction);
-
-worktreeCmd
-  .command('merge')
-  .description('Interactively select a worktree branch to merge into the current branch')
-  .option('-p, --pull', 'Pull the target branch from origin before merging')
-  .action(worktreeMergeAction);
-
-// ── copy ──────────────────────────────────────────────────────────────────────
-
-const copyCmd = program
-  .command('copy')
-  .alias('cp')
-  .description('Copy repo info to the clipboard  (subcommands: path, worktree, jira, branch)');
-
-copyCmd
-  .command('path')
-  .alias('worktree')
-  .description('Copy the current worktree folder path')
-  .action(copyPathAction);
-
-copyCmd
-  .command('jira')
-  .description('Copy the Jira ticket key from the current branch or worktree folder name')
-  .action(copyJiraAction);
-
-copyCmd.command('branch').description('Copy the current branch name').action(copyBranchAction);
-
-// ── config ────────────────────────────────────────────────────────────────────
-
-const configCmd = program
-  .command('config')
-  .alias('cfg')
-  .description(
-    'Manage geet config & init scripts  (subcommands: list, global, local, set, init-script, project-map)',
-  );
-
-configCmd
-  .command('list')
-  .description('List config values currently set; use -a to show every option plus global values')
-  .option('-a, --all', 'Show all options (set or not) and values set in the global config')
-  .action(configListAction);
-
-configCmd
-  .command('global')
-  .description('Interactively create/update the global ~/.geet/config file')
-  .action(configGlobalAction);
-
-configCmd
-  .command('local')
-  .description('Create/update .env or .env.local in the current directory')
-  .action(configLocalAction);
-
-configCmd
-  .command('set')
-  .description('Update a single config value in a chosen file')
-  .action(configSetAction);
-
-configCmd
-  .command('init-script')
-  .description(
-    'Scaffold the worktree init script for this repo (~/.geet/init/<repo>.sh); use -d for the default script',
-  )
-  .option('-d, --default', 'scaffold the default init script (~/.geet/init/default.sh) instead')
-  .action(configInitScriptAction);
-
-configCmd
-  .command('project-map')
-  .description(
-    'Set the project name for this repo — used by "worktree new" to skip the project name prompt',
-  )
-  .action(configProjectMapAction);
-
-// ── merge-release ─────────────────────────────────────────────────────────────
-
-program
-  .command('merge-release <source> <dest>')
-  .description('Pull both branches and merge <source> into <dest>')
-  .option('-n, --no-change', 'Merge using -X ours --no-commit (staged only, for manual inspection)')
-  .action(mergeReleaseAction);
 
 // ── Parse & Global Error Handler ─────────────────────────────────────────────
 

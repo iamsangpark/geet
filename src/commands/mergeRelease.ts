@@ -10,6 +10,7 @@
  *   5. Print git diff vs origin/<dest> so the user can review before pushing
  */
 
+import type { Command } from 'commander';
 import {
   fetchAll,
   pullBranch,
@@ -78,4 +79,15 @@ export async function mergeReleaseAction(
   }
 
   outro('Review the diff above before pushing.');
+}
+
+export function registerMergeReleaseCommand(program: Command) {
+  program
+    .command('merge-release <source> <dest>')
+    .description('Pull both branches and merge <source> into <dest>')
+    .option(
+      '-n, --no-change',
+      'Merge using -X ours --no-commit (staged only, for manual inspection)',
+    )
+    .action(mergeReleaseAction);
 }

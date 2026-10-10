@@ -27,7 +27,7 @@ CI runs typecheck, lint, format:check, tests, and build on every PR. A husky pre
 
 ```
 src/
-├── index.ts          # CLI entry point: commander subcommand registration + omelette autocompletion
+├── index.ts          # CLI entry point: calls each command's register*Command, derives omelette completions from the commander tree
 ├── config.ts         # Config loader: ~/.geet/config → .env → .env.local → process.env
 ├── utils/
 │   ├── errors.ts     # GeetError (carries .gitMessage) + error helpers
@@ -53,7 +53,7 @@ src/
 test/                 # vitest unit tests (mirrors `src/`)
 ```
 
-**Data flow:** `index.ts` registers commands and delegates to `commands/*.ts`. Commands call `utils/git.ts` for git operations and `prompts/` for interactive UI. Config values are imported from `config.ts` by commands that need them.
+**Data flow:** `index.ts` calls each command module's `register<Name>Command(program)` (commands and subcommands are defined next to their actions); tab completions and `(subcommands: …)` help text are derived from the registered tree, so adding a command needs no edits elsewhere. Commands call `utils/git.ts` for git operations and `prompts/` for interactive UI. Config values are imported from `config.ts` by commands that need them.
 
 **Utils placement:** helpers used by one command live in `commands/<command>/utils/`; anything shared across commands or modules lives in `src/utils/`. Every entry directly under `commands/` is a runnable command.
 
@@ -61,7 +61,7 @@ test/                 # vitest unit tests (mirrors `src/`)
 
 - Every `@clack/prompts` result must be passed through `guardCancel()` from `prompts/common.ts` — ESC/Ctrl+C resolves to a cancel Symbol, and `guardCancel()` exits cleanly.
 - Errors thrown from commands propagate to the top-level catch in `index.ts`, which prints `err.gitMessage || err.message` to stderr. Throw `GeetError` (from `utils/errors.ts`) for errors intended to display a clean user-facing message — it sets `.gitMessage`. Use `userMessage(err)` to read that message from an `unknown` caught value.
-- `omelette` (CJS-only) is imported via `createRequire`. Its `init()` must be called before `program.parseAsync()` — it intercepts tab-completion env vars and exits early without running commander.
+- `omelette` (CJS-only) is imported via `createRequire`; the version is read from `package.json` the same way. Its `init()` must be called before `program.parseAsync()` — it intercepts tab-completion args (`--compgen`) and exits early without running commander.
 
 ## Configuration
 

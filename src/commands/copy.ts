@@ -6,6 +6,8 @@
  *   geet copy branch           — copy the current branch name
  */
 
+import { describeWithSubcommands } from '../utils/commander.ts';
+import type { Command } from 'commander';
 import path from 'path';
 import { listWorktrees, getCurrentBranch } from '../utils/git.ts';
 import { GeetError } from '../utils/errors.ts';
@@ -66,4 +68,23 @@ export async function copyJiraAction() {
 
   await copyToClipboard(key);
   outro('Done.');
+}
+
+export function registerCopyCommand(program: Command) {
+  const copyCmd = program.command('copy').alias('cp');
+
+  copyCmd
+    .command('path')
+    .alias('worktree')
+    .description('Copy the current worktree folder path')
+    .action(copyPathAction);
+
+  copyCmd
+    .command('jira')
+    .description('Copy the Jira ticket key from the current branch or worktree folder name')
+    .action(copyJiraAction);
+
+  copyCmd.command('branch').description('Copy the current branch name').action(copyBranchAction);
+
+  describeWithSubcommands(copyCmd, 'Copy repo info to the clipboard');
 }

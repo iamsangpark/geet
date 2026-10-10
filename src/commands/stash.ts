@@ -6,6 +6,8 @@
  *   geet stash list         — interactive stash picker with guard
  */
 
+import { describeWithSubcommands } from '../utils/commander.ts';
+import type { Command } from 'commander';
 import {
   getUncommittedChanges,
   stashSave,
@@ -100,4 +102,27 @@ export async function stashListPopAction() {
   s2.stop(`stash@{${selected.index}} applied and removed.`);
 
   outro('Done.');
+}
+
+// commander resolves subcommand names *before* positional args on the parent,
+// so `geet stash pop` → stashPopAction, `geet stash "my msg"` → stashAction("my msg").
+export function registerStashCommand(program: Command) {
+  const stashCmd = program
+    .command('stash')
+    .alias('sts')
+    .option('-m, --message <msg>', 'Stash message (skips the prompt)')
+    .option('-k, --keep-untracked', 'Leave untracked files in the working tree (do not stash them)')
+    .action(stashAction);
+
+  stashCmd
+    .command('pop')
+    .description('Pop the most recent stash (with uncommitted-change guard)')
+    .action(stashPopAction);
+
+  stashCmd
+    .command('list')
+    .description('Interactively pick a stash entry to pop')
+    .action(stashListPopAction);
+
+  describeWithSubcommands(stashCmd, 'Stash changes, prompting for a message');
 }

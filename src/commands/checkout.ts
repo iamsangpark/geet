@@ -3,6 +3,7 @@
  * Implements `geet checkout [branch]` with uncommitted-change safety.
  */
 
+import type { Command } from 'commander';
 import {
   getUncommittedChanges,
   branchExists,
@@ -63,4 +64,12 @@ export async function checkoutAction(branch?: string) {
 
   s.stop(`Switched to "${branch}".`);
   outro(`Done.`);
+}
+
+export function registerCheckoutCommand(program: Command) {
+  program
+    .command('checkout [branch]')
+    .alias('co')
+    .description('Checkout a branch with uncommitted-change safety guard')
+    .action(checkoutAction);
 }
