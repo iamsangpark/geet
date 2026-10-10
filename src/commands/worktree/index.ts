@@ -47,10 +47,11 @@ export function registerWorktreeCommand(program: Command) {
   worktreeCmd
     .command('remove')
     .description(
-      'Interactively select worktrees to remove (use --path or --branch to target one directly)',
+      'Interactively select worktrees to remove (use --this, --path or --branch to target one directly)',
     )
     .option('--path <dir>', 'Remove the worktree at this path')
     .option('-b, --branch <branch>', 'Remove the worktree with this branch name')
+    .option('--this', 'Remove the worktree you are currently in')
     .action(worktreeRemoveAction);
 
   worktreeCmd

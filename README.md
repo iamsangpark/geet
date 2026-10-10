@@ -165,8 +165,9 @@ Interactively select one or more worktrees (other than the main one) to remove; 
 | ----------------------- | ----------------------------------------------------------------------- |
 | `--path <dir>`          | Remove the worktree at this path (skips the selection prompt).          |
 | `-b, --branch <branch>` | Remove the worktree with this branch name (skips the selection prompt). |
+| `--this`                | Remove the worktree you're currently in (skips the selection prompt).   |
 
-With `--path` and/or `--branch` the matching worktree is removed directly; if both are given they must match the same worktree. It errors if nothing matches or the match is the main worktree. The reset-or-skip and herdr-workspace prompts still apply.
+With `--path` and/or `--branch` the matching worktree is removed directly; if both are given they must match the same worktree. It errors if nothing matches or the match is the main worktree. `--this` removes the worktree containing the current directory and cannot be combined with the other two; it errors outside a worktree or inside the main one. The reset-or-skip and herdr-workspace prompts still apply.
 
 If you remove the worktree you're currently in, it is removed last and geet moves you somewhere valid afterwards — see [removing the current worktree](#removing-the-current-worktree).
 
@@ -174,6 +175,7 @@ If you remove the worktree you're currently in, it is removed last and geet move
 geet wt remove
 geet wt remove --path ~/worktrees/my-app/PROJ-1234-add_login_page
 geet wt remove --branch sp/PROJ-1234-add_login_page
+geet wt remove --this
 ```
 
 ---

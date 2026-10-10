@@ -45,18 +45,29 @@ import { openHerdrWorkspaces } from './utils/openWorktree.ts';
 interface RemoveOptions {
   path?: string;
   branch?: string;
+  this?: boolean;
 }
 
 export async function worktreeRemoveAction(options: RemoveOptions = {}) {
   intro('geet wt remove');
 
+  if (options.this && (options.path || options.branch)) {
+    throw new GeetError('--this cannot be combined with --path or --branch.');
+  }
+
   const loaded = await loadWorktrees({
-    filter: (w) => !w.isMain,
+    // --this needs the main worktree listed too, to tell "in main" from "in no worktree"
+    filter: options.this ? undefined : (w) => !w.isMain,
     emptyMessage: 'No worktrees to remove.',
   });
   if (!loaded) return;
 
   const mainPath = loaded.all.find((w) => w.isMain)?.path;
+  if (options.this) {
+    const target = await findCurrentWorktree(loaded.all);
+    await removeWorktrees('remove', loaded.candidates, mainPath, [target]);
+    return;
+  }
   if (options.path || options.branch) {
     const target = await findWorktree(loaded.all, options);
     await removeWorktrees('remove', loaded.candidates, mainPath, [target]);
@@ -86,6 +97,24 @@ async function findWorktree(all: Worktree[], { path: dir, branch }: RemoveOption
   if (!target) throw new GeetError(`No worktree found with ${description}.`);
   if (target.isMain) throw new GeetError(`Cannot remove the main worktree (${target.path}).`);
   return target;
+}
+
+/** The worktree containing the current directory. Fails outside a worktree or in the main one. */
+async function findCurrentWorktree(all: Worktree[]) {
+  const cwd = await canonicalPath(process.cwd());
+  let current: { worktree: Worktree; dir: string } | undefined;
+  for (const worktree of all) {
+    const dir = await canonicalPath(worktree.path);
+    const rel = path.relative(dir, cwd);
+    const inside = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+    // Prefer the deepest match in case worktrees are nested
+    if (inside && (!current || dir.length > current.dir.length)) current = { worktree, dir };
+  }
+  if (!current) throw new GeetError('The current directory is not inside a worktree.');
+  if (current.worktree.isMain) {
+    throw new GeetError(`Cannot remove the main worktree (${current.worktree.path}).`);
+  }
+  return current.worktree;
 }
 
 async function canonicalPath(p: string): Promise<string> {

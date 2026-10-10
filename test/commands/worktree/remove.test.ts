@@ -320,6 +320,36 @@ describe('removing the worktree geet is running in', () => {
     expect(spawnShellIn).toHaveBeenCalledWith('/repo');
   });
 
+  describe('--this', () => {
+    it('removes the worktree containing the current directory, then leaves it', async () => {
+      await worktreeRemoveAction({ this: true });
+      expect(promptMultiSelectWorktrees).not.toHaveBeenCalled();
+      expect(events).toEqual(['chdir /repo', 'remove /wt/a']);
+      expect(spawnShellIn).toHaveBeenCalledWith('/repo');
+    });
+
+    it('fails in the main worktree', async () => {
+      vi.mocked(process.cwd).mockReturnValue('/repo/src');
+      await expect(worktreeRemoveAction({ this: true })).rejects.toThrow(
+        'Cannot remove the main worktree (/repo).',
+      );
+      expect(removeWorktree).not.toHaveBeenCalled();
+    });
+
+    it('fails outside any worktree', async () => {
+      vi.mocked(process.cwd).mockReturnValue('/elsewhere');
+      await expect(worktreeRemoveAction({ this: true })).rejects.toThrow(
+        'The current directory is not inside a worktree.',
+      );
+    });
+
+    it('cannot be combined with --path or --branch', async () => {
+      await expect(worktreeRemoveAction({ this: true, branch: 'a' })).rejects.toThrow(
+        '--this cannot be combined',
+      );
+    });
+  });
+
   it('does nothing special when removing a different worktree', async () => {
     vi.mocked(promptMultiSelectWorktrees).mockResolvedValue([b]);
     await worktreeRemoveAction();
