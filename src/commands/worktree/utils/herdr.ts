@@ -53,7 +53,10 @@ export interface HerdrWorktree {
  * Run a herdr CLI command. Returns the parsed `result` object on success,
  * throws a cleaned Error on failure (including herdr's JSON `error` responses).
  */
-async function herdr(args: string[]): Promise<HerdrResult> {
+async function herdr(
+  args: string[],
+  { allowEmpty = false }: { allowEmpty?: boolean } = {},
+): Promise<HerdrResult> {
   let stdout: string | undefined;
   let stderr: string | undefined;
   try {
@@ -61,6 +64,9 @@ async function herdr(args: string[]): Promise<HerdrResult> {
   } catch (err) {
     throw herdrError(errorCode(err) === 'ENOENT' ? 'binary not found in PATH' : errorMessage(err));
   }
+
+  // some commands (e.g. `pane run`) print nothing on success
+  if (allowEmpty && !stdout?.trim() && !stderr?.trim()) return {};
 
   let response: HerdrResponse;
   try {
@@ -120,7 +126,7 @@ export async function closeHerdrWorkspace(workspaceId: string): Promise<void> {
 
 /** Runs a shell command line in a herdr pane, typed into the pane's terminal. */
 export async function runInHerdrPane(paneId: string, command: string): Promise<void> {
-  await herdr(['pane', 'run', paneId, command]);
+  await herdr(['pane', 'run', paneId, command], { allowEmpty: true });
 }
 
 /** The first pane of a herdr workspace (the one a freshly opened workspace starts with). */
