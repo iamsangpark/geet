@@ -38,6 +38,7 @@ interface HerdrResponse {
 interface HerdrResult {
   worktrees?: HerdrWorktree[];
   workspace?: { workspace_id: string };
+  panes?: { pane_id: string }[];
   already_open?: boolean;
 }
 
@@ -114,4 +115,17 @@ export async function openHerdrWorktree({
 /** Closes a herdr workspace (herdr state only — files are untouched). */
 export async function closeHerdrWorkspace(workspaceId: string): Promise<void> {
   await herdr(['workspace', 'close', workspaceId]);
+}
+
+/** Runs a shell command line in a herdr pane, typed into the pane's terminal. */
+export async function runInHerdrPane(paneId: string, command: string): Promise<void> {
+  await herdr(['pane', 'run', paneId, command]);
+}
+
+/** The first pane of a herdr workspace (the one a freshly opened workspace starts with). */
+export async function firstHerdrPane(workspaceId: string): Promise<string> {
+  const result = await herdr(['pane', 'list', '--workspace', workspaceId]);
+  const pane = result.panes?.[0];
+  if (!pane) throw herdrError('workspace has no panes');
+  return pane.pane_id;
 }

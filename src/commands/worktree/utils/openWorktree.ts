@@ -2,7 +2,14 @@ import path from 'path';
 import { userMessage } from '../../../utils/errors.ts';
 import { outro, logWarn } from '../../../prompts/common.ts';
 import { promptHerdrOpen } from '../../../prompts/worktree.ts';
-import { herdrMode, listHerdrWorktrees, openHerdrWorktree } from './herdr.ts';
+import {
+  herdrMode,
+  listHerdrWorktrees,
+  openHerdrWorktree,
+  firstHerdrPane,
+  runInHerdrPane,
+} from './herdr.ts';
+import { initScriptsCommand, runInitScripts } from './initScripts.ts';
 import { spawnShellIn } from './shell.ts';
 
 /**
@@ -11,11 +18,13 @@ import { spawnShellIn } from './shell.ts';
  * — or if herdr fails — spawn a shell in the directory.
  *
  * `dir` is the worktree path; `mainWorktreePath` is the repo root, used as herdr's repo context.
+ * `initScripts` run inside the new herdr workspace's first pane when one is opened,
+ * otherwise in this terminal just before the shell is spawned.
  */
 export async function openWorktree(
   dir: string,
   mainWorktreePath?: string,
-  { alreadyOpen = false }: { alreadyOpen?: boolean } = {},
+  { alreadyOpen = false, initScripts = [] }: { alreadyOpen?: boolean; initScripts?: string[] } = {},
 ) {
   const mode = herdrMode();
 
@@ -26,6 +35,14 @@ export async function openWorktree(
       try {
         const label = path.basename(dir);
         const result = await openHerdrWorktree({ repoPath: mainWorktreePath, dir, label });
+        if (initScripts.length > 0) {
+          try {
+            const paneId = await firstHerdrPane(result.workspaceId);
+            await runInHerdrPane(paneId, initScriptsCommand(initScripts));
+          } catch (err) {
+            logWarn(`Could not run init scripts in herdr: ${userMessage(err)}`);
+          }
+        }
         outro(`${result.alreadyOpen ? 'Switched to' : 'Opened'} herdr workspace: ${label}`);
         return;
       } catch (err) {
@@ -34,6 +51,7 @@ export async function openWorktree(
     }
   }
 
+  await runInitScripts(initScripts, dir);
   outro(`Spawning shell in: ${dir}`);
   spawnShellIn(dir);
 }
