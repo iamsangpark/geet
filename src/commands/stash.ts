@@ -1,11 +1,13 @@
 /**
- * commands/stash.js
+ * commands/stash.ts
  * Implements:
- *   ga stash [message]      — stash with optional message
- *   ga stash pop            — pop with uncommitted-change guard
- *   ga stash list-pop       — interactive stash picker with guard
+ *   geet stash [message]    — stash with optional message
+ *   geet stash pop          — pop with uncommitted-change guard
+ *   geet stash list         — interactive stash picker with guard
  */
 
+import { describeWithSubcommands } from '../utils/commander.ts';
+import type { Command } from 'commander';
 import {
   getUncommittedChanges,
   stashSave,
@@ -13,18 +15,16 @@ import {
   stashPopIndex,
   listStashes,
   gitAddAll,
-} from '../gitUtils.js';
+} from '../utils/git.ts';
 
+import { stashCurrentChanges } from '../utils/stashChanges.ts';
+
+import { intro, outro, logInfo, logWarn, spinner } from '../prompts/common.ts';
 import {
-  intro,
-  outro,
-  logInfo,
-  logWarn,
-  spinner,
   promptUncommittedChangesForPop,
   promptSelectStash,
   promptStashMessage,
-} from '../prompts.js';
+} from '../prompts/stash.ts';
 
 // ── Shared: uncommitted-change guard before popping ───────────────────────────
 
@@ -34,16 +34,9 @@ async function guardBeforePop() {
     logWarn(`Uncommitted changes detected:\n${changes}`);
     const action = await promptUncommittedChangesForPop();
     if (action === 'add-and-stash') {
-      const s = spinner();
-      s.start('Staging all untracked files and stashing...');
-      await gitAddAll();
-      await stashSave();
-      s.stop('All changes staged and stashed.');
+      await stashCurrentChanges({ includeUntracked: true });
     } else if (action === 'stash-first') {
-      const s = spinner();
-      s.start('Stashing current changes...');
-      await stashSave();
-      s.stop('Current changes stashed.');
+      await stashCurrentChanges({ includeUntracked: false });
     }
     // 'pop-anyway' — fall through and pop
   }
@@ -51,7 +44,7 @@ async function guardBeforePop() {
 
 // ── stash ─────────────────────────────────────────────────────────────────────
 
-export async function stashAction(options) {
+export async function stashAction(options: { message?: string; keepUntracked?: boolean }) {
   intro('geet stash');
 
   // Use -m flag if provided, otherwise prompt (empty = no message)
@@ -70,7 +63,7 @@ export async function stashAction(options) {
 
 // ── stash pop ─────────────────────────────────────────────────────────────────
 
-export async function stashPopAction(_options) {
+export async function stashPopAction() {
   intro('geet sts pop');
 
   await guardBeforePop();
@@ -85,7 +78,7 @@ export async function stashPopAction(_options) {
 
 // ── stash list-pop ────────────────────────────────────────────────────────────
 
-export async function stashListPopAction(_options) {
+export async function stashListPopAction() {
   intro('geet stash list');
 
   const s = spinner();
@@ -109,4 +102,27 @@ export async function stashListPopAction(_options) {
   s2.stop(`stash@{${selected.index}} applied and removed.`);
 
   outro('Done.');
+}
+
+// commander resolves subcommand names *before* positional args on the parent,
+// so `geet stash pop` → stashPopAction, `geet stash "my msg"` → stashAction("my msg").
+export function registerStashCommand(program: Command) {
+  const stashCmd = program
+    .command('stash')
+    .alias('sts')
+    .option('-m, --message <msg>', 'Stash message (skips the prompt)')
+    .option('-k, --keep-untracked', 'Leave untracked files in the working tree (do not stash them)')
+    .action(stashAction);
+
+  stashCmd
+    .command('pop')
+    .description('Pop the most recent stash (with uncommitted-change guard)')
+    .action(stashPopAction);
+
+  stashCmd
+    .command('list')
+    .description('Interactively pick a stash entry to pop')
+    .action(stashListPopAction);
+
+  describeWithSubcommands(stashCmd, 'Stash changes, prompting for a message');
 }

@@ -1,5 +1,5 @@
 /**
- * config.js
+ * config.ts
  * Loads geet configuration from (in ascending priority order):
  *   1. ~/.geet/config     — global user defaults
  *   2. .env               — project-level defaults (commit this)
@@ -7,9 +7,9 @@
  *   4. process.env        — shell environment (always wins)
  *
  * Supported keys:
- *   GEET_WORKTREE_BASE    — base directory for smart-add worktrees
+ *   GEET_WORKTREE_BASE    — base directory for new worktrees
  *                           default: ~/worktrees
- *   GEET_BRANCH_PREFIX    — prefix prepended to the branch name in smart-add
+ *   GEET_BRANCH_PREFIX    — prefix prepended to the branch name in `worktree new`
  *                           default: "" (no prefix)
  *   GEET_SYMLINK_PATHS    — comma-separated relative paths to symlink from the
  *                           main worktree into each newly-created worktree
@@ -38,6 +38,15 @@ import path from 'path';
 import os from 'os';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { config, parse } from 'dotenv';
+import { errorCode } from './utils/errors.ts';
+
+export type HerdrMode = 'off' | 'prompt' | 'auto';
+
+export interface ConfigKey {
+  key: string;
+  label: string;
+  placeholder: string;
+}
 
 // ── Config constants ──────────────────────────────────────────────────────────
 
@@ -48,36 +57,31 @@ export const GLOBAL_CONFIG_PATH = path.join(os.homedir(), '.geet', 'config');
  * Metadata for every supported config key.
  * Used by `geet config` to drive prompts and file I/O.
  */
-export const CONFIG_KEYS = [
+export const CONFIG_KEYS: ConfigKey[] = [
   {
     key: 'GEET_WORKTREE_BASE',
     label: 'Worktree base directory',
     placeholder: '~/dev/worktrees',
-    hint: 'base dir for smart-add worktrees',
   },
   {
     key: 'GEET_BRANCH_PREFIX',
     label: 'Branch prefix',
     placeholder: 'sp/',
-    hint: 'prepended to smart-add branch names',
   },
   {
     key: 'GEET_SYMLINK_PATHS',
     label: 'Symlink paths (comma-separated)',
     placeholder: '.env.local,node_modules',
-    hint: 'symlinked into each new worktree',
   },
   {
     key: 'GEET_HERDR',
     label: 'herdr integration',
     placeholder: 'prompt',
-    hint: 'off | prompt | auto — open worktrees as herdr workspaces',
   },
   {
     key: 'GEET_WORKTREE_LIST_SIZE',
     label: 'Visible list rows',
     placeholder: '10',
-    hint: 'rows shown in selection lists; 0 shows all',
   },
 ];
 
@@ -86,16 +90,13 @@ export const CONFIG_KEYS = [
 /**
  * Reads a dotenv-style file and returns a plain object of its key/value pairs.
  * Returns {} if the file does not exist.
- *
- * @param {string} filePath
- * @returns {Promise<Record<string, string>>}
  */
-export async function readEnvFile(filePath) {
+export async function readEnvFile(filePath: string): Promise<Record<string, string>> {
   try {
     const raw = await readFile(filePath, 'utf8');
     return parse(raw);
   } catch (err) {
-    if (err.code === 'ENOENT') return {};
+    if (errorCode(err) === 'ENOENT') return {};
     throw err;
   }
 }
@@ -106,21 +107,22 @@ export async function readEnvFile(filePath) {
  * Strategy: line-based merge — existing lines / comments are preserved.
  * Keys already present are updated in place; new keys are appended.
  * Creates the file (and any parent directories) if it doesn't exist.
- *
- * @param {string} filePath
- * @param {Record<string, string>} values  — only non-empty values are written
+ * Only non-empty values are written.
  */
-export async function writeEnvValues(filePath, values) {
+export async function writeEnvValues(
+  filePath: string,
+  values: Record<string, string>,
+): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
 
-  let lines;
+  let lines: string[];
   try {
     const raw = await readFile(filePath, 'utf8');
     lines = raw.split('\n');
     // Remove trailing empty line so we control newlines at the end
     if (lines.length && lines[lines.length - 1] === '') lines.pop();
   } catch (err) {
-    if (err.code === 'ENOENT') {
+    if (errorCode(err) === 'ENOENT') {
       lines = [];
     } else {
       throw err;
@@ -131,10 +133,10 @@ export async function writeEnvValues(filePath, values) {
 
   // Replace existing KEY=... lines in place
   lines = lines.map((line) => {
-    const match = line.match(/^([A-Z0-9_]+)\s*=/);
-    if (match && Object.hasOwn(values, match[1]) && values[match[1]] !== '') {
-      updated.add(match[1]);
-      return `${match[1]}=${values[match[1]]}`;
+    const key = line.match(/^([A-Z0-9_]+)\s*=/)?.[1];
+    if (key && Object.hasOwn(values, key) && values[key] !== '') {
+      updated.add(key);
+      return `${key}=${values[key]}`;
     }
     return line;
   });
@@ -151,16 +153,16 @@ export async function writeEnvValues(filePath, values) {
 
 // ── dotenv loading (side-effects) ─────────────────────────────────────────────
 
-// 1. Global user defaults (~/.geetrc) — lowest priority
+// 1. Global user defaults (~/.geet/config) — lowest priority
 config({ path: GLOBAL_CONFIG_PATH, override: false, quiet: true });
 
-// 2. Project-level .env — overrides ~/.geetrc
+// 2. Project-level .env — overrides ~/.geet/config
 config({ path: path.resolve('.env'), override: true, quiet: true });
 
 // 3. Local overrides (.env.local) — overrides .env, not committed
 config({ path: path.resolve('.env.local'), override: true, quiet: true });
 
-function resolveHome(p) {
+function resolveHome(p: string): string {
   return p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
 }
 
@@ -178,12 +180,14 @@ export const SYMLINK_PATHS = (process.env.GEET_SYMLINK_PATHS ?? '')
 const herdrRaw = (process.env.GEET_HERDR ?? '').trim().toLowerCase();
 
 /** 'off' | 'prompt' | 'auto' — unrecognised values fall back to 'off'. */
-export const HERDR_MODE = herdrRaw === 'prompt' || herdrRaw === 'auto' ? herdrRaw : 'off';
+export const HERDR_MODE: HerdrMode =
+  herdrRaw === 'prompt' || herdrRaw === 'auto' ? herdrRaw : 'off';
 
 const listSizeRaw = Number.parseInt(process.env.GEET_WORKTREE_LIST_SIZE ?? '', 10);
 
 /** Rows visible in selection lists; 0 means show everything. Invalid values fall back to 10. */
-export const WORKTREE_LIST_SIZE = Number.isInteger(listSizeRaw) && listSizeRaw >= 0 ? listSizeRaw : 10;
+export const WORKTREE_LIST_SIZE =
+  Number.isInteger(listSizeRaw) && listSizeRaw >= 0 ? listSizeRaw : 10;
 
 // ── Project map (~/.geet/project-map.json) ────────────────────────────────────
 
@@ -193,25 +197,21 @@ export const GLOBAL_PROJECT_MAP_PATH = path.join(os.homedir(), '.geet', 'project
 /**
  * Reads the repo → project name mapping from ~/.geet/project-map.json.
  * Returns {} if the file does not exist.
- *
- * @returns {Promise<Record<string, string>>}
  */
-export async function readProjectMap() {
+export async function readProjectMap(): Promise<Record<string, string>> {
   try {
     const raw = await readFile(GLOBAL_PROJECT_MAP_PATH, 'utf8');
     return JSON.parse(raw);
   } catch (err) {
-    if (err.code === 'ENOENT') return {};
+    if (errorCode(err) === 'ENOENT') return {};
     throw err;
   }
 }
 
 /**
  * Writes the full repo → project name mapping to ~/.geet/project-map.json.
- *
- * @param {Record<string, string>} map
  */
-export async function writeProjectMap(map) {
+export async function writeProjectMap(map: Record<string, string>): Promise<void> {
   await mkdir(path.dirname(GLOBAL_PROJECT_MAP_PATH), { recursive: true });
   await writeFile(GLOBAL_PROJECT_MAP_PATH, JSON.stringify(map, null, 2) + '\n', 'utf8');
 }

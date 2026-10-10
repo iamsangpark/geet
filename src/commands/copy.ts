@@ -1,27 +1,28 @@
 /**
- * commands/copy.js
+ * commands/copy.ts
  * Implements:
  *   geet copy path | worktree  — copy the current worktree folder path
  *   geet copy jira             — copy the Jira ticket key (e.g. PROJ-1234)
  *   geet copy branch           — copy the current branch name
  */
 
+import { describeWithSubcommands } from '../utils/commander.ts';
+import type { Command } from 'commander';
 import path from 'path';
-import { listWorktrees, getCurrentBranch } from '../gitUtils.js';
-import { intro, outro, logSuccess } from '../prompts.js';
+import { listWorktrees, getCurrentBranch } from '../utils/git.ts';
+import { GeetError } from '../utils/errors.ts';
+import { copyToClipboard } from '../utils/clipboard.ts';
+import { intro, outro } from '../prompts/common.ts';
 
 const JIRA_KEY = /[A-Z][A-Z0-9]*-\d+/;
 
-function fail(message) {
-  const err = new Error(message);
-  err.gitMessage = message;
-  return err;
+/** First Jira ticket key (e.g. PROJ-1234) found in `text`. */
+export function findJiraKey(text: string): string | undefined {
+  return text.match(JIRA_KEY)?.[0];
 }
 
-async function copyToClipboard(value) {
-  const { default: clipboard } = await import('clipboardy');
-  await clipboard.write(value);
-  logSuccess(`Copied to clipboard: ${value}`);
+function fail(message: string): GeetError {
+  return new GeetError(message);
 }
 
 async function currentWorktree() {
@@ -61,15 +62,34 @@ export async function copyJiraAction() {
   intro('geet copy jira');
 
   const branch = await getCurrentBranch();
-  let key = branch.match(JIRA_KEY)?.[0];
+  let key = findJiraKey(branch);
 
   if (!key) {
     const current = await currentWorktree();
-    key = path.basename(current.path).match(JIRA_KEY)?.[0];
+    key = findJiraKey(path.basename(current.path));
   }
 
   if (!key) throw fail('No Jira ticket found in the current branch or worktree folder name.');
 
   await copyToClipboard(key);
   outro('Done.');
+}
+
+export function registerCopyCommand(program: Command) {
+  const copyCmd = program.command('copy').alias('cp');
+
+  copyCmd
+    .command('path')
+    .alias('worktree')
+    .description('Copy the current worktree folder path')
+    .action(copyPathAction);
+
+  copyCmd
+    .command('jira')
+    .description('Copy the Jira ticket key from the current branch or worktree folder name')
+    .action(copyJiraAction);
+
+  copyCmd.command('branch').description('Copy the current branch name').action(copyBranchAction);
+
+  describeWithSubcommands(copyCmd, 'Copy repo info to the clipboard');
 }

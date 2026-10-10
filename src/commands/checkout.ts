@@ -1,29 +1,23 @@
 /**
- * commands/checkout.js
- * Implements `ga checkout [branch]` with uncommitted-change safety.
+ * commands/checkout.ts
+ * Implements `geet checkout [branch]` with uncommitted-change safety.
  */
 
+import type { Command } from 'commander';
 import {
   getUncommittedChanges,
   branchExists,
   checkoutBranch,
   checkoutNewBranch,
   checkoutForce,
-  stashSave,
-  gitAddAll,
-} from '../gitUtils.js';
+} from '../utils/git.ts';
 
-import {
-  intro,
-  outro,
-  logInfo,
-  logWarn,
-  spinner,
-  promptUncommittedChanges,
-  promptBranchName,
-} from '../prompts.js';
+import { stashCurrentChanges } from '../utils/stashChanges.ts';
 
-export async function checkoutAction(branch, _options) {
+import { intro, outro, logInfo, logWarn, spinner } from '../prompts/common.ts';
+import { promptUncommittedChanges, promptBranchName } from '../prompts/checkout.ts';
+
+export async function checkoutAction(branch?: string) {
   intro('geet co');
 
   // If no branch arg, prompt for one
@@ -39,16 +33,9 @@ export async function checkoutAction(branch, _options) {
     const action = await promptUncommittedChanges(branch);
 
     if (action === 'add-and-stash') {
-      const s = spinner();
-      s.start('Staging all untracked files and stashing...');
-      await gitAddAll();
-      await stashSave();
-      s.stop('All changes staged and stashed.');
+      await stashCurrentChanges({ includeUntracked: true });
     } else if (action === 'stash') {
-      const s = spinner();
-      s.start('Stashing changes...');
-      await stashSave();
-      s.stop('Changes stashed.');
+      await stashCurrentChanges({ includeUntracked: false });
     } else {
       // 'force' — will use --force flag
       useForce = true;
@@ -56,7 +43,7 @@ export async function checkoutAction(branch, _options) {
   }
 
   // Determine how to checkout
-  const s = (await import('../prompts.js')).spinner();
+  const s = spinner();
   s.start(`Switching to "${branch}"...`);
 
   if (useForce) {
@@ -77,4 +64,12 @@ export async function checkoutAction(branch, _options) {
 
   s.stop(`Switched to "${branch}".`);
   outro(`Done.`);
+}
+
+export function registerCheckoutCommand(program: Command) {
+  program
+    .command('checkout [branch]')
+    .alias('co')
+    .description('Checkout a branch with uncommitted-change safety guard')
+    .action(checkoutAction);
 }

@@ -1,6 +1,6 @@
 /**
- * commands/mergeRelease.js
- * Implements `ga merge-release <source> <dest>`.
+ * commands/mergeRelease.ts
+ * Implements `geet merge-release <source> <dest>`.
  *
  * Workflow:
  *   1. Fetch all remotes
@@ -10,17 +10,22 @@
  *   5. Print git diff vs origin/<dest> so the user can review before pushing
  */
 
+import type { Command } from 'commander';
 import {
   fetchAll,
   pullBranch,
   checkoutBranch,
   mergeBranch,
   getDiffVsOrigin,
-} from '../gitUtils.js';
+} from '../utils/git.ts';
 
-import { intro, outro, logInfo, logWarn, spinner } from '../prompts.js';
+import { intro, outro, logInfo, logWarn, spinner } from '../prompts/common.ts';
 
-export async function mergeReleaseAction(source, dest, options) {
+export async function mergeReleaseAction(
+  source: string,
+  dest: string,
+  options: { change?: boolean },
+) {
   intro(`geet merge-release: ${source} → ${dest}`);
 
   // Step 1: Fetch all remotes
@@ -74,4 +79,15 @@ export async function mergeReleaseAction(source, dest, options) {
   }
 
   outro('Review the diff above before pushing.');
+}
+
+export function registerMergeReleaseCommand(program: Command) {
+  program
+    .command('merge-release <source> <dest>')
+    .description('Pull both branches and merge <source> into <dest>')
+    .option(
+      '-n, --no-change',
+      'Merge using -X ours --no-commit (staged only, for manual inspection)',
+    )
+    .action(mergeReleaseAction);
 }
