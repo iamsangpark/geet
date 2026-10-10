@@ -9,9 +9,9 @@ import {
   checkoutBranch,
   checkoutNewBranch,
   checkoutForce,
-  stashSave,
-  gitAddAll,
 } from '../utils/git.ts';
+
+import { stashCurrentChanges } from '../utils/stashChanges.ts';
 
 import {
   intro,
@@ -23,7 +23,7 @@ import {
   promptBranchName,
 } from '../prompts.ts';
 
-export async function checkoutAction(branch?: string, _options?: unknown) {
+export async function checkoutAction(branch?: string) {
   intro('geet co');
 
   // If no branch arg, prompt for one
@@ -39,16 +39,9 @@ export async function checkoutAction(branch?: string, _options?: unknown) {
     const action = await promptUncommittedChanges(branch);
 
     if (action === 'add-and-stash') {
-      const s = spinner();
-      s.start('Staging all untracked files and stashing...');
-      await gitAddAll();
-      await stashSave();
-      s.stop('All changes staged and stashed.');
+      await stashCurrentChanges({ includeUntracked: true });
     } else if (action === 'stash') {
-      const s = spinner();
-      s.start('Stashing changes...');
-      await stashSave();
-      s.stop('Changes stashed.');
+      await stashCurrentChanges({ includeUntracked: false });
     } else {
       // 'force' — will use --force flag
       useForce = true;
@@ -56,7 +49,7 @@ export async function checkoutAction(branch?: string, _options?: unknown) {
   }
 
   // Determine how to checkout
-  const s = (await import('../prompts.ts')).spinner();
+  const s = spinner();
   s.start(`Switching to "${branch}"...`);
 
   if (useForce) {

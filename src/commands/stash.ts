@@ -15,6 +15,8 @@ import {
   gitAddAll,
 } from '../utils/git.ts';
 
+import { stashCurrentChanges } from '../utils/stashChanges.ts';
+
 import {
   intro,
   outro,
@@ -34,16 +36,9 @@ async function guardBeforePop() {
     logWarn(`Uncommitted changes detected:\n${changes}`);
     const action = await promptUncommittedChangesForPop();
     if (action === 'add-and-stash') {
-      const s = spinner();
-      s.start('Staging all untracked files and stashing...');
-      await gitAddAll();
-      await stashSave();
-      s.stop('All changes staged and stashed.');
+      await stashCurrentChanges({ includeUntracked: true });
     } else if (action === 'stash-first') {
-      const s = spinner();
-      s.start('Stashing current changes...');
-      await stashSave();
-      s.stop('Current changes stashed.');
+      await stashCurrentChanges({ includeUntracked: false });
     }
     // 'pop-anyway' — fall through and pop
   }
@@ -70,7 +65,7 @@ export async function stashAction(options: { message?: string; keepUntracked?: b
 
 // ── stash pop ─────────────────────────────────────────────────────────────────
 
-export async function stashPopAction(_options?: unknown) {
+export async function stashPopAction() {
   intro('geet sts pop');
 
   await guardBeforePop();
@@ -85,7 +80,7 @@ export async function stashPopAction(_options?: unknown) {
 
 // ── stash list-pop ────────────────────────────────────────────────────────────
 
-export async function stashListPopAction(_options?: unknown) {
+export async function stashListPopAction() {
   intro('geet stash list');
 
   const s = spinner();

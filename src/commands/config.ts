@@ -11,7 +11,7 @@
 
 import path from 'path';
 import os from 'os';
-import { access, copyFile, rename, chmod, mkdir, writeFile } from 'fs/promises';
+import { access, copyFile, rename, chmod, mkdir, writeFile, unlink } from 'fs/promises';
 import { constants } from 'fs';
 import { spawn } from 'child_process';
 import {
@@ -24,7 +24,7 @@ import {
   writeProjectMap,
 } from '../config.ts';
 import { GeetError, errorCode, errorMessage } from '../utils/errors.ts';
-import { listWorktrees } from '../utils/git.ts';
+import { getRepoName } from '../utils/git.ts';
 import {
   intro,
   outro,
@@ -219,10 +219,7 @@ export async function configProjectMapAction() {
   s.start('Detecting repo name...');
   let repoName: string;
   try {
-    const worktrees = await listWorktrees();
-    const main = worktrees.find((w) => w.isMain);
-    if (!main) throw new Error('Could not find main worktree.');
-    repoName = path.basename(main.path);
+    repoName = await getRepoName();
   } catch (err) {
     s.stop('');
     throw new GeetError(`Failed to detect repo name: ${errorMessage(err)}`);
@@ -337,7 +334,6 @@ async function scaffoldInitScript(targetPath: string, stubContent: string) {
       } catch (renameErr) {
         if (errorCode(renameErr) === 'EXDEV') {
           await copyFile(srcPath, targetPath);
-          const { unlink } = await import('fs/promises');
           await unlink(srcPath);
         } else {
           throw renameErr;
@@ -379,10 +375,7 @@ export async function configInitScriptAction(options: { default?: boolean }) {
   s.start('Detecting repo name from worktrees...');
   let repoName: string;
   try {
-    const worktrees = await listWorktrees();
-    const main = worktrees.find((w) => w.isMain);
-    if (!main) throw new Error('Could not find main worktree.');
-    repoName = path.basename(main.path);
+    repoName = await getRepoName();
   } catch (err) {
     s.stop('');
     throw new GeetError(`Failed to detect repo name: ${errorMessage(err)}`);

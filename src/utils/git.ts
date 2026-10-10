@@ -1,10 +1,11 @@
 /**
- * gitUtils.ts
+ * utils/git.ts
  * All git subprocess operations via execa.
  * Every exported function returns structured data or throws an Error
  * with a `.gitMessage` property containing a clean, user-facing message.
  */
 
+import path from 'path';
 import { execa, type Options } from 'execa';
 import { GeetError } from './errors.ts';
 
@@ -278,6 +279,22 @@ export async function listWorktrees(): Promise<Worktree[]> {
       isMain: i === 0,
     };
   });
+}
+
+/**
+ * The repo's main worktree (the first entry of `git worktree list`).
+ */
+export async function getMainWorktree(): Promise<Worktree | undefined> {
+  return (await listWorktrees()).find((w) => w.isMain);
+}
+
+/**
+ * Name of the repo, taken from the main worktree's folder name.
+ */
+export async function getRepoName(): Promise<string> {
+  const main = await getMainWorktree();
+  if (!main) throw new GeetError('Could not find main worktree.');
+  return path.basename(main.path);
 }
 
 // ── Merge / Pull ──────────────────────────────────────────────────────────────

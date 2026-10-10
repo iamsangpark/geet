@@ -180,13 +180,13 @@ const worktreeCmd = program
   .description(
     'Manage git worktrees  (subcommands: new, add, list, remove, prune, rename, link-fix, pull, merge)',
   )
-  .action((options, cmd) => {
+  .action((_options, cmd) => {
     if (cmd.args.length > 0) {
       throw new GeetError(
         `Unknown subcommand: "${cmd.args[0]}". Run "geet worktree --help" to see available subcommands.`,
       );
     }
-    return worktreeListAction(options);
+    return worktreeListAction();
   });
 
 worktreeCmd

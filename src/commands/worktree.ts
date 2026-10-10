@@ -10,11 +10,11 @@
 import path from 'path';
 import os from 'os';
 import { createInterface } from 'readline';
-import { symlink, mkdir, access, unlink } from 'fs/promises';
+import { access } from 'fs/promises';
 import { constants } from 'fs';
 import { spawn } from 'child_process';
 import { execa } from 'execa';
-import { GeetError, errorCode, errorMessage, userMessage } from '../utils/errors.ts';
+import { GeetError, errorMessage, userMessage } from '../utils/errors.ts';
 import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS, readProjectMap } from '../config.ts';
 import {
   type Worktree,
@@ -24,6 +24,7 @@ import {
   checkoutNewBranchInDir,
   deleteBranch,
   listWorktrees,
+  getMainWorktree,
   listLocalBranches,
   fetchPrune,
   remoteTrackingExists,
@@ -31,11 +32,13 @@ import {
   getUncommittedChanges,
   getWorktreeChanges,
   resetWorktree,
-  gitAddAll,
-  stashSave,
   pullBranch,
   mergeBranch,
 } from '../utils/git.ts';
+import { copyToClipboard } from '../utils/clipboard.ts';
+import { stashCurrentChanges } from '../utils/stashChanges.ts';
+import { buildWorktreeNames, parseWorktreePath } from './worktree/utils/naming.ts';
+import { linkPaths } from './worktree/utils/symlinks.ts';
 import {
   herdrMode,
   listHerdrWorktrees,
@@ -83,8 +86,7 @@ async function worktreeCreateImpl(introText: string, options: CreateOptions) {
   if (!dir || !branch) {
     let mappedProjectName: string | undefined;
     try {
-      const worktrees = await listWorktrees();
-      const main = worktrees.find((w) => w.isMain);
+      const main = await getMainWorktree();
       if (main) {
         const projectMap = await readProjectMap();
         mappedProjectName = projectMap[path.basename(main.path)];
@@ -117,15 +119,9 @@ async function worktreeCreateImpl(introText: string, options: CreateOptions) {
         : branch;
       dir = path.join(WORKTREE_BASE, projectName, folderName);
     } else {
-      const {
-        projectName,
-        jiraName,
-        description: rawDescription,
-      } = await promptWorktreeSmartAdd(mappedProjectName);
-      const description = rawDescription.trim().replace(/ /g, '_');
-      const folderName = jiraName ? `${jiraName}-${description}` : description;
-      dir = path.join(WORKTREE_BASE, projectName, folderName);
-      branch = `${BRANCH_PREFIX}${folderName}`;
+      const names = buildWorktreeNames(await promptWorktreeSmartAdd(mappedProjectName));
+      dir = names.dir;
+      branch = names.branch;
     }
   }
 
@@ -141,9 +137,7 @@ async function worktreeCreateImpl(introText: string, options: CreateOptions) {
   await addWorktree(branch, resolvedDir);
   s.stop('Worktree created.');
 
-  const { default: clipboard } = await import('clipboardy');
-  await clipboard.write(resolvedDir);
-  logSuccess(`Path copied to clipboard: ${resolvedDir}`);
+  await copyToClipboard(resolvedDir, 'Path copied to clipboard');
 
   await postWorktreeCreate(resolvedDir, { skipInit: !options.init });
 }
@@ -158,7 +152,7 @@ export function worktreeAddAction(options: CreateOptions) {
 
 // ── worktree list ─────────────────────────────────────────────────────────────
 
-export async function worktreeListAction(_options?: unknown) {
+export async function worktreeListAction() {
   intro('geet wt list');
 
   const s = spinner();
@@ -180,9 +174,7 @@ export async function worktreeListAction(_options?: unknown) {
 
   const selected = await promptSelectWorktree(decorated);
 
-  const { default: clipboard } = await import('clipboardy');
-  await clipboard.write(selected.path);
-  logSuccess(`Path copied to clipboard: ${selected.path}`);
+  await copyToClipboard(selected.path, 'Path copied to clipboard');
 
   await openWorktree(selected.path, mainPath, {
     alreadyOpen: openWorkspaces.has(path.resolve(selected.path)),
@@ -191,7 +183,7 @@ export async function worktreeListAction(_options?: unknown) {
 
 // ── worktree remove ───────────────────────────────────────────────────────────
 
-export async function worktreeRemoveAction(_options?: unknown) {
+export async function worktreeRemoveAction() {
   intro('geet wt remove');
 
   const s = spinner();
@@ -212,7 +204,7 @@ export async function worktreeRemoveAction(_options?: unknown) {
 
 // ── worktree prune ────────────────────────────────────────────────────────────
 
-export async function worktreePruneAction(_options?: unknown) {
+export async function worktreePruneAction() {
   intro('geet wt prune');
 
   const s = spinner();
@@ -243,7 +235,7 @@ export async function worktreePruneAction(_options?: unknown) {
 
 // ── worktree rename ───────────────────────────────────────────────────────────
 
-export async function worktreeRenameAction(_options?: unknown) {
+export async function worktreeRenameAction() {
   intro('geet wt rename');
 
   const s = spinner();
@@ -261,27 +253,12 @@ export async function worktreeRenameAction(_options?: unknown) {
 
   const selected = await promptSelectWorktreeForRename(renameable);
 
-  // Parse current path into projectName / jiraName / description for pre-filling
-  const currentFolderName = path.basename(selected.path);
-  const currentProjectName = path.basename(path.dirname(selected.path));
-  const jiraMatch = currentFolderName.match(/^([A-Z]+-\d+)-(.+)$/);
-  const currentJiraName = jiraMatch?.[1] ?? '';
-  const currentDescription = (jiraMatch?.[2] ?? currentFolderName).replace(/_/g, ' ');
-
-  const {
-    projectName,
-    jiraName,
-    description: rawDescription,
-  } = await promptWorktreeSmartAdd(undefined, {
-    projectName: currentProjectName,
-    jiraName: currentJiraName,
-    description: currentDescription,
-  });
-
-  const description = rawDescription.trim().replace(/ /g, '_');
-  const newFolderName = jiraName ? `${jiraName}-${description}` : description;
-  const newDir = path.resolve(path.join(WORKTREE_BASE, projectName, newFolderName));
-  const newBranch = `${BRANCH_PREFIX}${newFolderName}`;
+  // Pre-fill the prompts from the current path
+  const names = buildWorktreeNames(
+    await promptWorktreeSmartAdd(undefined, parseWorktreePath(selected.path)),
+  );
+  const newDir = path.resolve(names.dir);
+  const newBranch = names.branch;
   const oldDir = selected.path;
   const oldBranch = selected.branch;
 
@@ -315,7 +292,7 @@ export async function worktreeRenameAction(_options?: unknown) {
 
 // ── worktree link-fix ─────────────────────────────────────────────────────────
 
-export async function worktreeLinkFixAction(_options?: unknown) {
+export async function worktreeLinkFixAction() {
   intro('geet wt link-fix');
 
   if (SYMLINK_PATHS.length === 0) {
@@ -343,14 +320,14 @@ export async function worktreeLinkFixAction(_options?: unknown) {
 
   const selected = await promptSelectWorktreeForLinkFix(nonMain);
 
-  await relinkSymlinks(mainWorktree.path, selected.path, SYMLINK_PATHS);
+  await linkPaths(mainWorktree.path, selected.path, SYMLINK_PATHS, { replace: true });
 
   outro(`Re-linked symlinks in: ${selected.path}`);
 }
 
 // ── worktree pull ─────────────────────────────────────────────────────────────
 
-export async function worktreePullAction(_options?: unknown) {
+export async function worktreePullAction() {
   intro('geet wt pull');
 
   const s = spinner();
@@ -382,16 +359,9 @@ async function guardBeforeMerge(): Promise<void> {
     logWarn(`Uncommitted changes detected:\n${changes}`);
     const action = await promptUncommittedChangesForMerge();
     if (action === 'add-and-stash') {
-      const s = spinner();
-      s.start('Staging all untracked files and stashing...');
-      await gitAddAll();
-      await stashSave();
-      s.stop('All changes staged and stashed.');
+      await stashCurrentChanges({ includeUntracked: true });
     } else if (action === 'stash-first') {
-      const s = spinner();
-      s.start('Stashing current changes...');
-      await stashSave();
-      s.stop('Current changes stashed.');
+      await stashCurrentChanges({ includeUntracked: false });
     }
     // 'merge-anyway' — fall through and merge
   }
@@ -442,11 +412,10 @@ export async function worktreeMergeAction(options: { pull?: boolean }) {
  *   3. Spawn an interactive shell in the new directory
  */
 async function postWorktreeCreate(dir: string, { skipInit = false } = {}) {
-  const worktrees = await listWorktrees();
-  const mainWorktree = worktrees.find((w) => w.isMain);
+  const mainWorktree = await getMainWorktree();
 
   if (mainWorktree && SYMLINK_PATHS.length > 0) {
-    await createSymlinks(mainWorktree.path, dir, SYMLINK_PATHS);
+    await linkPaths(mainWorktree.path, dir, SYMLINK_PATHS);
   }
 
   if (mainWorktree && !skipInit) {
@@ -705,73 +674,6 @@ async function runInitScript(mainWorktreePath: string, newWorktreeDir: string) {
 
   const repoName = path.basename(mainWorktreePath);
   await runScript(path.join(initDir, `${repoName}.sh`), newWorktreeDir);
-}
-
-/**
- * Removes existing entries and creates fresh symlinks for each relative path
- * from sourceRoot into targetRoot.
- */
-async function relinkSymlinks(sourceRoot: string, targetRoot: string, relativePaths: string[]) {
-  for (const relPath of relativePaths) {
-    const src = path.join(sourceRoot, relPath);
-    const dest = path.join(targetRoot, relPath);
-
-    try {
-      await access(src, constants.F_OK);
-    } catch {
-      logWarn(`Skipped (source does not exist): ${relPath}`);
-      continue;
-    }
-
-    await mkdir(path.dirname(dest), { recursive: true });
-
-    try {
-      await unlink(dest);
-    } catch (err) {
-      if (errorCode(err) !== 'ENOENT') {
-        logError(`Failed to remove existing ${relPath}: ${errorMessage(err)}`);
-        continue;
-      }
-    }
-
-    try {
-      await symlink(src, dest);
-      logSuccess(`Symlinked: ${relPath}`);
-    } catch (err) {
-      logError(`Failed to symlink ${relPath}: ${errorMessage(err)}`);
-    }
-  }
-}
-
-/**
- * Creates soft symlinks for each relative path from sourceRoot into targetRoot.
- * Skips paths that already exist at the destination.
- */
-async function createSymlinks(sourceRoot: string, targetRoot: string, relativePaths: string[]) {
-  for (const relPath of relativePaths) {
-    const src = path.join(sourceRoot, relPath);
-    const dest = path.join(targetRoot, relPath);
-
-    try {
-      await access(src, constants.F_OK);
-    } catch {
-      logWarn(`Skipped (source does not exist): ${relPath}`);
-      continue;
-    }
-
-    await mkdir(path.dirname(dest), { recursive: true });
-
-    try {
-      await symlink(src, dest);
-      logSuccess(`Symlinked: ${relPath}`);
-    } catch (err) {
-      if (errorCode(err) === 'EEXIST') {
-        logWarn(`Skipped (already exists): ${relPath}`);
-      } else {
-        logError(`Failed to symlink ${relPath}: ${errorMessage(err)}`);
-      }
-    }
-  }
 }
 
 /**

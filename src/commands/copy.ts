@@ -9,18 +9,13 @@
 import path from 'path';
 import { listWorktrees, getCurrentBranch } from '../utils/git.ts';
 import { GeetError } from '../utils/errors.ts';
-import { intro, outro, logSuccess } from '../prompts.ts';
+import { copyToClipboard } from '../utils/clipboard.ts';
+import { intro, outro } from '../prompts.ts';
 
 const JIRA_KEY = /[A-Z][A-Z0-9]*-\d+/;
 
 function fail(message: string): GeetError {
   return new GeetError(message);
-}
-
-async function copyToClipboard(value: string) {
-  const { default: clipboard } = await import('clipboardy');
-  await clipboard.write(value);
-  logSuccess(`Copied to clipboard: ${value}`);
 }
 
 async function currentWorktree() {
