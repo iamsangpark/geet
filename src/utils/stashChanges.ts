@@ -1,5 +1,5 @@
 import { gitAddAll, stashSave } from './git.ts';
-import { spinner } from '../prompts.ts';
+import { spinner } from '../prompts/common.ts';
 
 /**
  * Stashes the working tree behind a spinner. With `includeUntracked`, everything

@@ -1,6 +1,7 @@
 import path from 'path';
 import { userMessage } from '../../../utils/errors.ts';
-import { outro, logWarn, promptHerdrOpen } from '../../../prompts.ts';
+import { outro, logWarn } from '../../../prompts/common.ts';
+import { promptHerdrOpen } from '../../../prompts/worktree.ts';
 import { herdrMode, listHerdrWorktrees, openHerdrWorktree } from './herdr.ts';
 import { spawnShellIn } from './shell.ts';
 

@@ -3,14 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../../../src/prompts.ts', () => ({
+vi.mock('../../../../src/prompts/common.ts', () => ({
   logWarn: vi.fn(),
   logError: vi.fn(),
   logSuccess: vi.fn(),
 }));
 
 import { linkPaths } from '../../../../src/commands/worktree/utils/symlinks.ts';
-import { logWarn } from '../../../../src/prompts.ts';
+import { logWarn } from '../../../../src/prompts/common.ts';
 
 let root: string;
 let source: string;

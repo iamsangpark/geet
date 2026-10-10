@@ -6,7 +6,7 @@ vi.mock('@clack/prompts', () => ({
 }));
 
 import * as p from '@clack/prompts';
-import { guardCancel } from '../src/prompts.ts';
+import { guardCancel } from '../../src/prompts/common.ts';
 
 afterEach(() => {
   vi.restoreAllMocks();

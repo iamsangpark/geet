@@ -10,14 +10,12 @@ import { GeetError } from '../../utils/errors.ts';
 import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS, readProjectMap } from '../../config.ts';
 import { addWorktree, getMainWorktree, listLocalBranches } from '../../utils/git.ts';
 import { copyToClipboard } from '../../utils/clipboard.ts';
+import { intro, logInfo, spinner } from '../../prompts/common.ts';
 import {
-  intro,
-  logInfo,
-  spinner,
   promptWorktreeSmartAdd,
   promptWorktreeProjectName,
   promptSelectExistingBranch,
-} from '../../prompts.ts';
+} from '../../prompts/worktree.ts';
 import { buildWorktreeNames } from './utils/naming.ts';
 import { linkPaths } from './utils/symlinks.ts';
 import { runInitScript } from './utils/initScripts.ts';

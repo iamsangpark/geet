@@ -12,15 +12,8 @@ import {
   mergeBranch,
 } from '../../utils/git.ts';
 import { stashCurrentChanges } from '../../utils/stashChanges.ts';
-import {
-  intro,
-  outro,
-  logWarn,
-  spinner,
-  promptSelectWorktreeForPull,
-  promptSelectWorktreeForMerge,
-  promptUncommittedChangesForMerge,
-} from '../../prompts.ts';
+import { intro, outro, logWarn, spinner } from '../../prompts/common.ts';
+import { promptSelectWorktree, promptUncommittedChangesForMerge } from '../../prompts/worktree.ts';
 import { loadWorktrees } from './utils/loadWorktrees.ts';
 
 // ── worktree pull ─────────────────────────────────────────────────────────────
@@ -38,7 +31,9 @@ export async function worktreePullAction() {
   const loaded = await loadWorktrees({ emptyMessage: 'No worktrees found.' });
   if (!loaded) return;
 
-  const selected = await promptSelectWorktreeForPull(loaded.candidates);
+  const selected = await promptSelectWorktree(loaded.candidates, {
+    message: 'Select a worktree to pull:',
+  });
   await pullWithSpinner(selected.branch);
 
   outro('Done.');
@@ -70,7 +65,9 @@ export async function worktreeMergeAction(options: { pull?: boolean }) {
   });
   if (!loaded) return;
 
-  const selected = await promptSelectWorktreeForMerge(loaded.candidates);
+  const selected = await promptSelectWorktree(loaded.candidates, {
+    message: 'Select a worktree to merge into the current branch:',
+  });
 
   await guardBeforeMerge();
 

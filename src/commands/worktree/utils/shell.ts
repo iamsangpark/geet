@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import { errorMessage } from '../../../utils/errors.ts';
-import { logError } from '../../../prompts.ts';
+import { logError } from '../../../prompts/common.ts';
 
 /**
  * Spawns an interactive shell session in the given directory.

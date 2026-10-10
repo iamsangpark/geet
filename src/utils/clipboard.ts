@@ -1,4 +1,4 @@
-import { logSuccess } from '../prompts.ts';
+import { logSuccess } from '../prompts/common.ts';
 
 /**
  * Writes `value` to the system clipboard and reports it.

@@ -23,10 +23,12 @@ import {
   logWarn,
   logError,
   spinner,
+  promptConfirm,
+} from '../../prompts/common.ts';
+import {
   promptWorktreeChangesForRemove,
   promptMultiSelectWorktrees,
-  promptConfirm,
-} from '../../prompts.ts';
+} from '../../prompts/worktree.ts';
 import { closeHerdrWorkspace } from './utils/herdr.ts';
 import { loadWorktrees } from './utils/loadWorktrees.ts';
 import { openHerdrWorkspaces } from './utils/openWorktree.ts';

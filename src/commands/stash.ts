@@ -17,16 +17,12 @@ import {
 
 import { stashCurrentChanges } from '../utils/stashChanges.ts';
 
+import { intro, outro, logInfo, logWarn, spinner } from '../prompts/common.ts';
 import {
-  intro,
-  outro,
-  logInfo,
-  logWarn,
-  spinner,
   promptUncommittedChangesForPop,
   promptSelectStash,
   promptStashMessage,
-} from '../prompts.ts';
+} from '../prompts/stash.ts';
 
 // ── Shared: uncommitted-change guard before popping ───────────────────────────
 

@@ -5,7 +5,8 @@
 
 import path from 'path';
 import { copyToClipboard } from '../../utils/clipboard.ts';
-import { intro, promptSelectWorktree } from '../../prompts.ts';
+import { intro } from '../../prompts/common.ts';
+import { promptSelectWorktree } from '../../prompts/worktree.ts';
 import { loadWorktrees } from './utils/loadWorktrees.ts';
 import { openWorktree, openHerdrWorkspaces } from './utils/openWorktree.ts';
 

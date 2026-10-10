@@ -61,7 +61,7 @@ import {
   configSetAction,
   configInitScriptAction,
   configProjectMapAction,
-} from './commands/config.ts';
+} from './commands/config/index.ts';
 
 // ── Autocompletion Setup ──────────────────────────────────────────────────────
 

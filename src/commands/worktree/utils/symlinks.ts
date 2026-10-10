@@ -2,7 +2,7 @@ import path from 'path';
 import { symlink, mkdir, access, unlink } from 'fs/promises';
 import { constants } from 'fs';
 import { errorCode, errorMessage } from '../../../utils/errors.ts';
-import { logWarn, logError, logSuccess } from '../../../prompts.ts';
+import { logWarn, logError, logSuccess } from '../../../prompts/common.ts';
 
 /**
  * Symlinks each relative path from sourceRoot into targetRoot.

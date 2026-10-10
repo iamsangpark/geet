@@ -1,5 +1,5 @@
 import { listWorktrees, type Worktree } from '../../../utils/git.ts';
-import { outro, logInfo, spinner } from '../../../prompts.ts';
+import { outro, logInfo, spinner } from '../../../prompts/common.ts';
 
 /**
  * Lists worktrees behind a spinner and narrows them with `filter`. When nothing is

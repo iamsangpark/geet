@@ -5,15 +5,8 @@
 
 import path from 'path';
 import { moveWorktree, checkoutNewBranchInDir, deleteBranch } from '../../utils/git.ts';
-import {
-  intro,
-  outro,
-  logInfo,
-  spinner,
-  promptSelectWorktreeForRename,
-  promptWorktreeSmartAdd,
-  promptConfirm,
-} from '../../prompts.ts';
+import { intro, outro, logInfo, spinner, promptConfirm } from '../../prompts/common.ts';
+import { promptSelectWorktree, promptWorktreeSmartAdd } from '../../prompts/worktree.ts';
 import { buildWorktreeNames, parseWorktreePath } from './utils/naming.ts';
 import { loadWorktrees } from './utils/loadWorktrees.ts';
 
@@ -26,7 +19,9 @@ export async function worktreeRenameAction() {
   });
   if (!loaded) return;
 
-  const selected = await promptSelectWorktreeForRename(loaded.candidates);
+  const selected = await promptSelectWorktree(loaded.candidates, {
+    message: 'Select a worktree to rename:',
+  });
 
   // Pre-fill the prompts from the current path
   const names = buildWorktreeNames(

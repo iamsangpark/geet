@@ -13,15 +13,8 @@ import {
 
 import { stashCurrentChanges } from '../utils/stashChanges.ts';
 
-import {
-  intro,
-  outro,
-  logInfo,
-  logWarn,
-  spinner,
-  promptUncommittedChanges,
-  promptBranchName,
-} from '../prompts.ts';
+import { intro, outro, logInfo, logWarn, spinner } from '../prompts/common.ts';
+import { promptUncommittedChanges, promptBranchName } from '../prompts/checkout.ts';
 
 export async function checkoutAction(branch?: string) {
   intro('geet co');

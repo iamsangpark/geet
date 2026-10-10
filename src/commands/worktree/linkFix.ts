@@ -5,7 +5,8 @@
 
 import { GeetError } from '../../utils/errors.ts';
 import { SYMLINK_PATHS } from '../../config.ts';
-import { intro, outro, logInfo, promptSelectWorktreeForLinkFix } from '../../prompts.ts';
+import { intro, outro, logInfo } from '../../prompts/common.ts';
+import { promptSelectWorktree } from '../../prompts/worktree.ts';
 import { linkPaths } from './utils/symlinks.ts';
 import { loadWorktrees } from './utils/loadWorktrees.ts';
 
@@ -29,7 +30,9 @@ export async function worktreeLinkFixAction() {
     throw new GeetError('Could not determine the main worktree.');
   }
 
-  const selected = await promptSelectWorktreeForLinkFix(loaded.candidates);
+  const selected = await promptSelectWorktree(loaded.candidates, {
+    message: 'Select a worktree to re-link:',
+  });
 
   await linkPaths(mainWorktree.path, selected.path, SYMLINK_PATHS, { replace: true });
 

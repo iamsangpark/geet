@@ -31,8 +31,12 @@ src/
 ├── config.ts         # Config loader: ~/.geet/config → .env → .env.local → process.env
 ├── utils/
 │   ├── errors.ts     # GeetError (carries .gitMessage) + error helpers
-│   └── git.ts        # All git operations (via execa) — the only file that shells out to git
-├── prompts.ts        # @clack/prompts wrappers + guardCancel() pattern
+│   ├── git.ts        # All git operations (via execa) — the only file that shells out to git
+│   ├── clipboard.ts  # copyToClipboard (lazy clipboardy import)
+│   └── stashChanges.ts # shared "stash current changes" spinner flow
+├── prompts/          # @clack/prompts UI layer, one file per domain
+│   ├── common.ts     # guardCancel(), intro/outro/log*, spinner, searchSelect, promptConfirm
+│   └── checkout.ts, stash.ts, worktree.ts, config.ts
 └── commands/
     ├── checkout.ts
     ├── stash.ts
@@ -41,19 +45,21 @@ src/
     │   └── utils/   # herdr.ts (herdr CLI calls via execa + HERDR_ENV detection), openWorktree, shell,
     │                # initScripts, symlinks, naming, loadWorktrees
     ├── copy.ts
-    ├── config.ts
+    ├── config/
+    │   ├── index.ts, list.ts, edit.ts, projectMap.ts, initScript.ts
+    │   └── utils/   # editor, stubs
     └── mergeRelease.ts
 
-test/                 # vitest unit tests (utils/git, utils/errors, config, prompts)
+test/                 # vitest unit tests (mirrors `src/`)
 ```
 
-**Data flow:** `index.ts` registers commands and delegates to `commands/*.ts`. Commands call `utils/git.ts` for git operations and `prompts.ts` for interactive UI. Config values are imported from `config.ts` by commands that need them.
+**Data flow:** `index.ts` registers commands and delegates to `commands/*.ts`. Commands call `utils/git.ts` for git operations and `prompts/` for interactive UI. Config values are imported from `config.ts` by commands that need them.
 
 **Utils placement:** helpers used by one command live in `commands/<command>/utils/`; anything shared across commands or modules lives in `src/utils/`. Every entry directly under `commands/` is a runnable command.
 
 **Key patterns:**
 
-- Every `@clack/prompts` result must be passed through `guardCancel()` from `prompts.ts` — ESC/Ctrl+C resolves to a cancel Symbol, and `guardCancel()` exits cleanly.
+- Every `@clack/prompts` result must be passed through `guardCancel()` from `prompts/common.ts` — ESC/Ctrl+C resolves to a cancel Symbol, and `guardCancel()` exits cleanly.
 - Errors thrown from commands propagate to the top-level catch in `index.ts`, which prints `err.gitMessage || err.message` to stderr. Throw `GeetError` (from `utils/errors.ts`) for errors intended to display a clean user-facing message — it sets `.gitMessage`. Use `userMessage(err)` to read that message from an `unknown` caught value.
 - `omelette` (CJS-only) is imported via `createRequire`. Its `init()` must be called before `program.parseAsync()` — it intercepts tab-completion env vars and exits early without running commander.
 

@@ -5,7 +5,7 @@ import { access } from 'fs/promises';
 import { constants } from 'fs';
 import { execa } from 'execa';
 import { errorMessage } from '../../../utils/errors.ts';
-import { logInfo, logError, logSuccess } from '../../../prompts.ts';
+import { logInfo, logError, logSuccess } from '../../../prompts/common.ts';
 
 /**
  * Runs a single init script if it exists and is executable.

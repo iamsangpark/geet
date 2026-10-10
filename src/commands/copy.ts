@@ -10,7 +10,7 @@ import path from 'path';
 import { listWorktrees, getCurrentBranch } from '../utils/git.ts';
 import { GeetError } from '../utils/errors.ts';
 import { copyToClipboard } from '../utils/clipboard.ts';
-import { intro, outro } from '../prompts.ts';
+import { intro, outro } from '../prompts/common.ts';
 
 const JIRA_KEY = /[A-Z][A-Z0-9]*-\d+/;
 

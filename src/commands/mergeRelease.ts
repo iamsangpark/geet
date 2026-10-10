@@ -18,7 +18,7 @@ import {
   getDiffVsOrigin,
 } from '../utils/git.ts';
 
-import { intro, outro, logInfo, logWarn, spinner } from '../prompts.ts';
+import { intro, outro, logInfo, logWarn, spinner } from '../prompts/common.ts';
 
 export async function mergeReleaseAction(
   source: string,
