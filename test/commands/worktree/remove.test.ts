@@ -168,6 +168,47 @@ describe('worktree remove', () => {
     expect(lastQuestion).toBeLessThan(firstDestructive);
   });
 
+  describe('--path / --branch', () => {
+    it('removes the worktree at --path without showing the selection prompt', async () => {
+      await worktreeRemoveAction({ path: '/wt/b' });
+      expect(promptMultiSelectWorktrees).not.toHaveBeenCalled();
+      expect(events).toEqual(['remove /wt/b']);
+      expect(outro).toHaveBeenCalledWith('Removed 1 worktree(s).');
+    });
+
+    it('removes the worktree whose branch matches --branch', async () => {
+      vi.mocked(listWorktrees).mockResolvedValue([main, wt('a', 'feat/a'), b]);
+      await worktreeRemoveAction({ branch: 'feat/a' });
+      expect(events).toEqual(['remove /wt/a']);
+    });
+
+    it('requires --path and --branch to agree when both are given', async () => {
+      await expect(worktreeRemoveAction({ path: '/wt/a', branch: 'b' })).rejects.toThrow(
+        'No worktree found with path "/wt/a" and branch "b".',
+      );
+      expect(removeWorktree).not.toHaveBeenCalled();
+    });
+
+    it('errors when nothing matches', async () => {
+      await expect(worktreeRemoveAction({ branch: 'nope' })).rejects.toThrow(
+        'No worktree found with branch "nope".',
+      );
+    });
+
+    it('refuses to remove the main worktree', async () => {
+      await expect(worktreeRemoveAction({ path: '/repo' })).rejects.toThrow(
+        'Cannot remove the main worktree (/repo).',
+      );
+      expect(removeWorktree).not.toHaveBeenCalled();
+    });
+
+    it('still asks before resetting a dirty worktree', async () => {
+      vi.mocked(getWorktreeChanges).mockResolvedValue([' M x']);
+      await worktreeRemoveAction({ path: '/wt/a' });
+      expect(events).toEqual(['changes prompt: a', 'reset /wt/a', 'remove /wt/a']);
+    });
+  });
+
   describe('herdr workspaces', () => {
     it('asks once for a single open workspace and closes it after removal', async () => {
       vi.mocked(openHerdrWorkspaces).mockResolvedValue(new Map([['/wt/a', 'ws-a']]));

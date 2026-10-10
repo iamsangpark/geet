@@ -7,7 +7,7 @@
 
 import path from 'path';
 import { realpath } from 'fs/promises';
-import { userMessage } from '../../utils/errors.ts';
+import { GeetError, userMessage } from '../../utils/errors.ts';
 import {
   type Worktree,
   removeWorktree,
@@ -42,7 +42,12 @@ import { openHerdrWorkspaces } from './utils/openWorktree.ts';
 
 // ── worktree remove ───────────────────────────────────────────────────────────
 
-export async function worktreeRemoveAction() {
+interface RemoveOptions {
+  path?: string;
+  branch?: string;
+}
+
+export async function worktreeRemoveAction(options: RemoveOptions = {}) {
   intro('geet wt remove');
 
   const loaded = await loadWorktrees({
@@ -51,7 +56,41 @@ export async function worktreeRemoveAction() {
   });
   if (!loaded) return;
 
-  await removeWorktrees('remove', loaded.candidates, loaded.all.find((w) => w.isMain)?.path);
+  const mainPath = loaded.all.find((w) => w.isMain)?.path;
+  if (options.path || options.branch) {
+    const target = await findWorktree(loaded.all, options);
+    await removeWorktrees('remove', loaded.candidates, mainPath, [target]);
+    return;
+  }
+
+  await removeWorktrees('remove', loaded.candidates, mainPath);
+}
+
+/**
+ * Resolves `--path` / `--branch` to a single removable worktree. When both are
+ * given they must agree. The main worktree can never be targeted.
+ */
+async function findWorktree(all: Worktree[], { path: dir, branch }: RemoveOptions) {
+  const wantedDir = dir ? await canonicalPath(dir) : undefined;
+  const matches: Worktree[] = [];
+  for (const w of all) {
+    if (wantedDir && (await canonicalPath(w.path)) !== wantedDir) continue;
+    if (branch && w.branch !== branch) continue;
+    matches.push(w);
+  }
+
+  const description = [dir && `path "${dir}"`, branch && `branch "${branch}"`]
+    .filter(Boolean)
+    .join(' and ');
+  const [target] = matches;
+  if (!target) throw new GeetError(`No worktree found with ${description}.`);
+  if (target.isMain) throw new GeetError(`Cannot remove the main worktree (${target.path}).`);
+  return target;
+}
+
+async function canonicalPath(p: string): Promise<string> {
+  const resolved = path.resolve(p);
+  return realpath(resolved).catch(() => resolved);
 }
 
 // ── worktree prune ────────────────────────────────────────────────────────────
@@ -107,9 +146,11 @@ async function removeWorktrees(
   command: keyof typeof REMOVAL_COMMANDS,
   candidates: Worktree[],
   mainWorktreePath?: string,
+  chosen?: Worktree[],
 ) {
   const { prompt, done, preselected } = REMOVAL_COMMANDS[command];
-  const selected = await promptMultiSelectWorktrees(prompt, candidates, { preselected });
+  const selected =
+    chosen ?? (await promptMultiSelectWorktrees(prompt, candidates, { preselected }));
 
   // Look up herdr workspaces before removal, while herdr still lists the checkout
   const openWorkspaces = await openHerdrWorkspaces(mainWorktreePath);

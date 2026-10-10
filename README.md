@@ -161,10 +161,19 @@ geet wt            # same thing
 
 Interactively select one or more worktrees (other than the main one) to remove; none are selected by default. Worktrees with uncommitted or untracked files are listed and you can reset them (`git reset --hard` + `git clean -fd`) before removing, or skip them. With herdr enabled, it also asks whether to close open workspaces for the removed worktrees. Failures on individual worktrees are reported without stopping the rest.
 
+| Flag                    | Description                                                             |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `--path <dir>`          | Remove the worktree at this path (skips the selection prompt).          |
+| `-b, --branch <branch>` | Remove the worktree with this branch name (skips the selection prompt). |
+
+With `--path` and/or `--branch` the matching worktree is removed directly; if both are given they must match the same worktree. It errors if nothing matches or the match is the main worktree. The reset-or-skip and herdr-workspace prompts still apply.
+
 If you remove the worktree you're currently in, it is removed last and geet moves you somewhere valid afterwards — see [removing the current worktree](#removing-the-current-worktree).
 
 ```sh
 geet wt remove
+geet wt remove --path ~/worktrees/my-app/PROJ-1234-add_login_page
+geet wt remove --branch sp/PROJ-1234-add_login_page
 ```
 
 ---
