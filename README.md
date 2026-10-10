@@ -159,7 +159,7 @@ geet wt            # same thing
 
 ### `geet worktree remove`
 
-Interactively select a worktree (other than the main one) to remove.
+Interactively select one or more worktrees (other than the main one) to remove; none are selected by default. Worktrees with uncommitted or untracked files are listed and you can reset them (`git reset --hard` + `git clean -fd`) before removing, or skip them. With herdr enabled, it also asks whether to close open workspaces for the removed worktrees. Failures on individual worktrees are reported without stopping the rest.
 
 ```sh
 geet wt remove
@@ -169,7 +169,7 @@ geet wt remove
 
 ### `geet worktree prune`
 
-Fetches from origin (pruning deleted remote branches), then finds worktrees whose remote-tracking branch no longer exists. You pick which of those to remove. Failures on individual worktrees are reported without stopping the rest.
+Fetches from origin (pruning deleted remote branches), then finds worktrees whose remote-tracking branch no longer exists. You pick which of those to remove. It uses the same checks as `remove`: one question about closing open herdr workspaces, and a reset-or-skip prompt for each worktree with blocking changes. Failures on individual worktrees are reported without stopping the rest.
 
 ```sh
 geet wt prune
@@ -334,7 +334,7 @@ When `GEET_HERDR` is `prompt` or `auto` **and** geet is running inside a herdr p
 
 - `prompt` asks each time ("Open in new herdr workspace" / "Switch to herdr workspace" / "Open shell here"); `auto` always opens the workspace.
 - If a workspace for the worktree is already open, geet switches to it rather than creating a duplicate. `worktree list` marks such worktrees with `herdr ●`.
-- `worktree remove` / `prune` also close the removed worktree's herdr workspace (never the one geet is running in).
+- `worktree remove` / `prune` ask whether to also close the removed worktrees' herdr workspaces (never the one geet is running in).
 - Outside herdr, with `GEET_HERDR=off`, or if the `herdr` command fails, geet falls back to the normal shell. Use `GEET_HERDR=off geet wt …` for a one-off override.
 
 ### Init scripts

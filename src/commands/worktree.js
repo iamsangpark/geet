@@ -4,7 +4,7 @@
  *   geet worktree new                  — create a new branch + worktree interactively
  *   geet worktree add                  — check out an existing local branch as a worktree
  *   geet worktree list                 — pick a worktree; copies path + opens shell
- *   geet worktree remove               — interactive; delete a selected worktree
+ *   geet worktree remove               — interactive; multi-select worktrees to delete
  */
 
 import path from 'path';
@@ -49,13 +49,12 @@ import {
   logSuccess,
   spinner,
   promptSelectWorktree,
-  promptSelectWorktreeForRemove,
   promptWorktreeChangesForRemove,
   promptSelectWorktreeForRename,
   promptSelectWorktreeForLinkFix,
   promptSelectWorktreeForPull,
   promptSelectWorktreeForMerge,
-  promptMultiSelectWorktreesForPrune,
+  promptMultiSelectWorktrees,
   promptUncommittedChangesForMerge,
   promptWorktreeSmartAdd,
   promptWorktreeProjectName,
@@ -192,43 +191,7 @@ export async function worktreeRemoveAction(_options) {
     return;
   }
 
-  const selected = await promptSelectWorktreeForRemove(removable);
-
-  // Look up herdr workspaces before removal, while herdr still lists the checkout
-  const openWorkspaces = await openHerdrWorkspaces(all.find((w) => w.isMain)?.path);
-
-  // Ask everything up front so nothing destructive happens before the last answer
-  const workspaceId = openWorkspaces.get(path.resolve(selected.path));
-  const closable = workspaceId && workspaceId !== process.env.HERDR_WORKSPACE_ID;
-  const closeWorkspace = closable
-    ? await promptConfirm('A herdr workspace is open for this worktree. Close it too?')
-    : false;
-
-  const changes = await getWorktreeChanges(selected.path);
-  const needsReset = changes.length > 0;
-  if (needsReset) {
-    logWarn(`Uncommitted changes in ${selected.path}:\n${changes.join('\n')}`);
-    if ((await promptWorktreeChangesForRemove()) === 'cancel') {
-      outro('Nothing removed.');
-      return;
-    }
-
-    const sReset = spinner();
-    sReset.start('Resetting worktree...');
-    await resetWorktree(selected.path);
-    sReset.stop('Worktree reset.');
-  }
-
-  const s2 = spinner();
-  s2.start(`Removing worktree "${selected.branch}"...`);
-  await removeWorktree(selected.path);
-  s2.stop('Worktree removed.');
-
-  if (closeWorkspace) {
-    await closeHerdrWorkspaceFor(selected.path, openWorkspaces);
-  }
-
-  outro(`Removed: ${selected.path}`);
+  await removeWorktrees('remove', removable, all.find((w) => w.isMain)?.path);
 }
 
 // ── worktree prune ────────────────────────────────────────────────────────────
@@ -259,44 +222,7 @@ export async function worktreePruneAction(_options) {
     return;
   }
 
-  const toRemove = await promptMultiSelectWorktreesForPrune(stale);
-
-  if (toRemove.length === 0) {
-    outro('Nothing removed.');
-    return;
-  }
-
-  const openWorkspaces = await openHerdrWorkspaces(all.find((w) => w.isMain)?.path);
-
-  const s3 = spinner();
-  const failed = [];
-  for (const w of toRemove) {
-    s3.start(`Removing worktree "${w.branch}"...`);
-    try {
-      await removeWorktree(w.path);
-      s3.stop(`Removed: ${w.branch}`);
-      await closeHerdrWorkspaceFor(w.path, openWorkspaces);
-    } catch (err) {
-      s3.stop(`Failed to remove: ${w.branch}`);
-      failed.push({ worktree: w, message: err.gitMessage || err.message });
-    }
-  }
-
-  const removedCount = toRemove.length - failed.length;
-  if (removedCount > 0) {
-    logInfo(`Pruned ${removedCount} worktree(s).`);
-  }
-
-  if (failed.length > 0) {
-    logError(`Failed to remove ${failed.length} worktree(s):`);
-    for (const { worktree, message } of failed) {
-      logError(`  ${worktree.branch} (${worktree.path}): ${message}`);
-    }
-    outro('Prune completed with errors.');
-    return;
-  }
-
-  outro(`Pruned ${toRemove.length} worktree(s).`);
+  await removeWorktrees('prune', stale, all.find((w) => w.isMain)?.path);
 }
 
 // ── worktree rename ───────────────────────────────────────────────────────────
@@ -565,18 +491,124 @@ async function openHerdrWorkspaces(mainWorktreePath) {
   return open;
 }
 
-/**
- * Closes the herdr workspace for a removed worktree, unless it is the workspace
- * geet itself is running in. Failures are warnings, never fatal.
- */
-async function closeHerdrWorkspaceFor(worktreePath, openWorkspaces) {
-  const id = openWorkspaces.get(path.resolve(worktreePath));
-  if (!id || id === process.env.HERDR_WORKSPACE_ID) return;
+const REMOVAL_COMMANDS = {
+  remove: { prompt: 'Select worktrees to remove', done: 'Removed', preselected: false },
+  prune: { prompt: 'Select worktrees to prune', done: 'Pruned', preselected: true },
+};
 
+/**
+ * Everything `remove` and `prune` have in common once they know their candidate
+ * worktrees: pick which to remove, gather every answer up front, remove them,
+ * then report. Failures on individual worktrees don't stop the rest.
+ *
+ * @param {'remove' | 'prune'} command
+ * @param {Array<{ path: string, branch: string }>} candidates
+ * @param {string} [mainWorktreePath]
+ */
+async function removeWorktrees(command, candidates, mainWorktreePath) {
+  const { prompt, done, preselected } = REMOVAL_COMMANDS[command];
+  const selected = await promptMultiSelectWorktrees(prompt, candidates, { preselected });
+
+  // Look up herdr workspaces before removal, while herdr still lists the checkout
+  const openWorkspaces = await openHerdrWorkspaces(mainWorktreePath);
+
+  const plans = await planWorktreeRemovals(selected, openWorkspaces);
+  if (plans.length === 0) {
+    outro('Nothing removed.');
+    return;
+  }
+
+  const failed = [];
+  for (const plan of plans) {
+    try {
+      await executeWorktreeRemoval(plan);
+    } catch (err) {
+      failed.push({ worktree: plan.worktree, message: err.gitMessage || err.message });
+    }
+  }
+
+  const doneCount = plans.length - failed.length;
+  if (failed.length > 0) {
+    if (doneCount > 0) logInfo(`${done} ${doneCount} worktree(s).`);
+    logError(`Failed to remove ${failed.length} worktree(s):`);
+    for (const { worktree, message } of failed) {
+      logError(`  ${worktree.branch} (${worktree.path}): ${message}`);
+    }
+    outro(`geet wt ${command} completed with errors.`);
+    return;
+  }
+
+  outro(`${done} ${doneCount} worktree(s).`);
+}
+
+/**
+ * Interactive half of removal. Asks everything up front so nothing destructive
+ * happens before the last answer:
+ *   - once: whether to close the open herdr workspaces (never geet's own)
+ *   - per worktree with blocking changes: list them, then reset or skip
+ *
+ * @param {Array<{ path: string, branch: string }>} worktrees
+ * @param {Map<string, string>} openWorkspaces  — worktree path → herdr workspace id
+ * @returns {Promise<Array<{ worktree: object, workspaceId: string | null, reset: boolean }>>}
+ *   plans for the worktrees that should be removed (skipped ones are omitted);
+ *   `workspaceId` is set only when that workspace should be closed
+ */
+async function planWorktreeRemovals(worktrees, openWorkspaces) {
+  const closableId = (w) => {
+    const id = openWorkspaces.get(path.resolve(w.path));
+    return id && id !== process.env.HERDR_WORKSPACE_ID ? id : null;
+  };
+
+  const closableCount = worktrees.filter((w) => closableId(w)).length;
+  let closeWorkspaces = false;
+  if (closableCount === 1) {
+    closeWorkspaces = await promptConfirm('A herdr workspace is open for this worktree. Close it too?');
+  } else if (closableCount > 1) {
+    closeWorkspaces = await promptConfirm(`${closableCount} of these worktrees have an open herdr workspace. Close them too?`);
+  }
+
+  const plans = [];
+  for (const worktree of worktrees) {
+    const changes = await getWorktreeChanges(worktree.path);
+    const reset = changes.length > 0;
+    if (reset) {
+      logWarn(`Uncommitted changes in ${worktree.path}:\n${changes.join('\n')}`);
+      if ((await promptWorktreeChangesForRemove(worktree.branch)) === 'skip') continue;
+    }
+    plans.push({ worktree, workspaceId: closeWorkspaces ? closableId(worktree) : null, reset });
+  }
+  return plans;
+}
+
+/**
+ * Executing half of removal: reset (if planned), remove, then close the herdr
+ * workspace (if planned; failure there is only a warning). Throws if git
+ * refuses to reset or remove.
+ */
+async function executeWorktreeRemoval({ worktree, workspaceId, reset }) {
+  if (reset) {
+    const sReset = spinner();
+    sReset.start(`Resetting "${worktree.branch}"...`);
+    await resetWorktree(worktree.path);
+    sReset.stop('Worktree reset.');
+  }
+
+  const s = spinner();
+  s.start(`Removing worktree "${worktree.branch}"...`);
   try {
-    await closeHerdrWorkspace(id);
+    await removeWorktree(worktree.path);
   } catch (err) {
-    logWarn(`Could not close herdr workspace: ${err.gitMessage || err.message}`);
+    s.stop(`Failed to remove: ${worktree.branch}`);
+    throw err;
+  }
+  s.stop(`Removed: ${worktree.branch}`);
+
+  if (workspaceId) {
+    try {
+      await closeHerdrWorkspace(workspaceId);
+    } catch (err) {
+      logWarn(`Could not close herdr workspace: ${err.gitMessage || err.message}`);
+    }
   }
 }
 
