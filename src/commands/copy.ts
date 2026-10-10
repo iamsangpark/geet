@@ -1,5 +1,5 @@
 /**
- * commands/copy.js
+ * commands/copy.ts
  * Implements:
  *   geet copy path | worktree  — copy the current worktree folder path
  *   geet copy jira             — copy the Jira ticket key (e.g. PROJ-1234)
@@ -7,18 +7,17 @@
  */
 
 import path from 'path';
-import { listWorktrees, getCurrentBranch } from '../gitUtils.js';
-import { intro, outro, logSuccess } from '../prompts.js';
+import { listWorktrees, getCurrentBranch } from '../gitUtils.ts';
+import { GeetError } from '../errors.ts';
+import { intro, outro, logSuccess } from '../prompts.ts';
 
 const JIRA_KEY = /[A-Z][A-Z0-9]*-\d+/;
 
-function fail(message) {
-  const err = new Error(message);
-  err.gitMessage = message;
-  return err;
+function fail(message: string): GeetError {
+  return new GeetError(message);
 }
 
-async function copyToClipboard(value) {
+async function copyToClipboard(value: string) {
   const { default: clipboard } = await import('clipboardy');
   await clipboard.write(value);
   logSuccess(`Copied to clipboard: ${value}`);

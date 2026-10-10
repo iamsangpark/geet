@@ -1,5 +1,5 @@
 /**
- * commands/config.js
+ * commands/config.ts
  * Implements:
  *   geet config list [--all]         — list config values currently set (--all: every key + global values)
  *   geet config global               — interactively create/update ~/.geet/config
@@ -22,8 +22,9 @@ import {
   writeEnvValues,
   readProjectMap,
   writeProjectMap,
-} from '../config.js';
-import { listWorktrees } from '../gitUtils.js';
+} from '../config.ts';
+import { GeetError, errorCode, errorMessage } from '../errors.ts';
+import { listWorktrees } from '../gitUtils.ts';
 import {
   intro,
   outro,
@@ -39,7 +40,7 @@ import {
   promptOverrideOrSkip,
   promptCopyOrMove,
   guardCancel,
-} from '../prompts.js';
+} from '../prompts.ts';
 import * as p from '@clack/prompts';
 
 // ── config list ───────────────────────────────────────────────────────────────
@@ -50,21 +51,25 @@ import * as p from '@clack/prompts';
  * --all:   every known key (set or not) from the local files, followed by the
  *          values set in the global ~/.geet/config.
  */
-export async function configListAction(options) {
-  const load = async (label, filePath) => ({ label, path: filePath, values: await readEnvFile(filePath) });
+export async function configListAction(options: { all?: boolean }) {
+  const load = async (label: string, filePath: string) => ({
+    label,
+    path: filePath,
+    values: await readEnvFile(filePath),
+  });
   const local = await load('LOCAL', path.resolve('.env.local'));
   const repo = await load('REPO', path.resolve('.env'));
   const global = await load('GLOBAL', GLOBAL_CONFIG_PATH);
 
   // Effective value comes from process.env (shell wins, then LOCAL > REPO > GLOBAL).
   // Attribute it to the highest-priority file holding that value, else the shell.
-  const effectiveSource = (key) => {
+  const effectiveSource = (key: string) => {
     const hit = [local, repo, global].find((src) => src.values[key] === process.env[key]);
     return hit ? hit.label : 'ENV';
   };
 
   const width = Math.max(...CONFIG_KEYS.map((k) => k.key.length));
-  const line = (key, value, source) =>
+  const line = (key: string, value: string | undefined, source?: string) =>
     `  ${key.padEnd(width)}  ${value === undefined ? '(not set)' : value}${source ? `  [${source}]` : ''}`;
 
   if (!options.all) {
@@ -81,7 +86,7 @@ export async function configListAction(options) {
     [local, '.env.local'],
     [repo, '.env'],
     [global, '~/.geet/config'],
-  ];
+  ] as const;
   sections.forEach(([src, file], i) => {
     if (i > 0) console.log();
     console.log(`${src.label} (${file}):`);
@@ -176,13 +181,14 @@ export async function configSetAction() {
   const key = await promptSelectConfigKey(current);
 
   const meta = CONFIG_KEYS.find((k) => k.key === key);
-  const newValue = await p.text({
-    message: `New value for ${meta.label}:`,
-    placeholder: meta.placeholder,
-    hint: meta.hint,
-    initialValue: current[key] ?? '',
-  });
-  guardCancel(newValue);
+  if (!meta) throw new GeetError(`Unknown config key: ${key}`);
+  const newValue = guardCancel(
+    await p.text({
+      message: `New value for ${meta.label}:`,
+      placeholder: meta.placeholder,
+      initialValue: current[key] ?? '',
+    }),
+  );
 
   const trimmedValue = newValue?.trim();
   if (!trimmedValue) {
@@ -211,7 +217,7 @@ export async function configProjectMapAction() {
 
   const s = spinner();
   s.start('Detecting repo name...');
-  let repoName;
+  let repoName: string;
   try {
     const worktrees = await listWorktrees();
     const main = worktrees.find((w) => w.isMain);
@@ -219,9 +225,7 @@ export async function configProjectMapAction() {
     repoName = path.basename(main.path);
   } catch (err) {
     s.stop('');
-    const error = new Error(`Failed to detect repo name: ${err.message}`);
-    error.gitMessage = error.message;
-    throw error;
+    throw new GeetError(`Failed to detect repo name: ${errorMessage(err)}`);
   }
   s.stop(`Repo: ${repoName}`);
 
@@ -232,12 +236,13 @@ export async function configProjectMapAction() {
     logInfo(`Current mapping: ${repoName} → ${current}`);
   }
 
-  const projectName = await p.text({
-    message: `Project name for "${repoName}" (leave empty to clear):`,
-    placeholder: 'my-project',
-    initialValue: current,
-  });
-  guardCancel(projectName);
+  const projectName = guardCancel(
+    await p.text({
+      message: `Project name for "${repoName}" (leave empty to clear):`,
+      placeholder: 'my-project',
+      initialValue: current,
+    }),
+  );
 
   const trimmedName = projectName?.trim();
   if (!trimmedName) {
@@ -258,7 +263,7 @@ export async function configProjectMapAction() {
 const REPO_STUB_CONTENT = `#!/usr/bin/env bash
 set -euo pipefail
 
-# Runs in the new worktree directory after \`geet worktree add\` / \`geet wt smart-add\`.
+# Runs in the new worktree directory after \`geet worktree new\` / \`geet worktree add\`.
 # The current directory is the newly-created worktree.
 #
 # Examples:
@@ -284,7 +289,7 @@ const INIT_DIR = path.join(os.homedir(), '.geet', 'init');
  * Creates, copies, or edits the script at targetPath using stubContent as the
  * template when no source file is provided.
  */
-async function scaffoldInitScript(targetPath, stubContent) {
+async function scaffoldInitScript(targetPath: string, stubContent: string) {
   logInfo(`Target: ${targetPath}`);
 
   let exists = false;
@@ -317,9 +322,7 @@ async function scaffoldInitScript(targetPath, stubContent) {
     try {
       await access(srcPath, constants.F_OK);
     } catch {
-      const err = new Error(`Source file not found: ${srcPath}`);
-      err.gitMessage = err.message;
-      throw err;
+      throw new GeetError(`Source file not found: ${srcPath}`);
     }
 
     const operation = await promptCopyOrMove();
@@ -332,7 +335,7 @@ async function scaffoldInitScript(targetPath, stubContent) {
       try {
         await rename(srcPath, targetPath);
       } catch (renameErr) {
-        if (renameErr.code === 'EXDEV') {
+        if (errorCode(renameErr) === 'EXDEV') {
           await copyFile(srcPath, targetPath);
           const { unlink } = await import('fs/promises');
           await unlink(srcPath);
@@ -363,7 +366,7 @@ async function scaffoldInitScript(targetPath, stubContent) {
  * Scaffold (or replace) the worktree init script for the current repo,
  * or the default init script when --default/-d is passed.
  */
-export async function configInitScriptAction(options) {
+export async function configInitScriptAction(options: { default?: boolean }) {
   if (options.default) {
     intro('geet config init-script --default');
     await scaffoldInitScript(path.join(INIT_DIR, 'default.sh'), DEFAULT_STUB_CONTENT);
@@ -374,7 +377,7 @@ export async function configInitScriptAction(options) {
 
   const s = spinner();
   s.start('Detecting repo name from worktrees...');
-  let repoName;
+  let repoName: string;
   try {
     const worktrees = await listWorktrees();
     const main = worktrees.find((w) => w.isMain);
@@ -382,9 +385,7 @@ export async function configInitScriptAction(options) {
     repoName = path.basename(main.path);
   } catch (err) {
     s.stop('');
-    const error = new Error(`Failed to detect repo name: ${err.message}`);
-    error.gitMessage = error.message;
-    throw error;
+    throw new GeetError(`Failed to detect repo name: ${errorMessage(err)}`);
   }
   s.stop(`Repo: ${repoName}`);
 
@@ -396,13 +397,11 @@ export async function configInitScriptAction(options) {
 /**
  * Opens the given file in the user's $EDITOR (falls back to vi).
  * Waits for the editor to exit before continuing.
- *
- * @param {string} filePath
  */
-function openInEditor(filePath) {
+function openInEditor(filePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const editorEnv = process.env.EDITOR || 'vi';
-    const [editor, ...editorArgs] = editorEnv.split(/\s+/);
+    const [editor = 'vi', ...editorArgs] = editorEnv.split(/\s+/);
     logInfo(`Opening in $EDITOR (${editorEnv})...`);
 
     const child = spawn(editor, [...editorArgs, filePath], {

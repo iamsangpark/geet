@@ -1,5 +1,5 @@
 /**
- * commands/worktree.js
+ * commands/worktree.ts
  * Implements:
  *   geet worktree new                  — create a new branch + worktree interactively
  *   geet worktree add                  — check out an existing local branch as a worktree
@@ -14,8 +14,10 @@ import { symlink, mkdir, access, unlink } from 'fs/promises';
 import { constants } from 'fs';
 import { spawn } from 'child_process';
 import { execa } from 'execa';
-import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS, readProjectMap } from '../config.js';
+import { GeetError, errorCode, errorMessage, userMessage } from '../errors.ts';
+import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS, readProjectMap } from '../config.ts';
 import {
+  type Worktree,
   addWorktree,
   removeWorktree,
   moveWorktree,
@@ -33,13 +35,13 @@ import {
   stashSave,
   pullBranch,
   mergeBranch,
-} from '../gitUtils.js';
+} from '../gitUtils.ts';
 import {
   herdrMode,
   listHerdrWorktrees,
   openHerdrWorktree,
   closeHerdrWorkspace,
-} from '../herdrUtils.js';
+} from '../herdrUtils.ts';
 import {
   intro,
   outro,
@@ -61,18 +63,25 @@ import {
   promptSelectExistingBranch,
   promptConfirm,
   promptHerdrOpen,
-} from '../prompts.js';
+} from '../prompts.ts';
+
+interface CreateOptions {
+  folder?: string;
+  branch?: string;
+  existing?: boolean;
+  init?: boolean;
+}
 
 // ── worktree new / add ────────────────────────────────────────────────────────
 
-async function worktreeCreateImpl(introText, options) {
+async function worktreeCreateImpl(introText: string, options: CreateOptions) {
   intro(introText);
 
   let dir = options.folder;
   let branch = options.branch;
 
   if (!dir || !branch) {
-    let mappedProjectName;
+    let mappedProjectName: string | undefined;
     try {
       const worktrees = await listWorktrees();
       const main = worktrees.find((w) => w.isMain);
@@ -95,9 +104,9 @@ async function worktreeCreateImpl(introText, options) {
       s.stop();
 
       if (branches.length === 0) {
-        const err = new Error();
-        err.gitMessage = 'No local branches available (all are already checked out in a worktree).';
-        throw err;
+        throw new GeetError(
+          'No local branches available (all are already checked out in a worktree).',
+        );
       }
 
       branch = await promptSelectExistingBranch(branches);
@@ -108,13 +117,19 @@ async function worktreeCreateImpl(introText, options) {
         : branch;
       dir = path.join(WORKTREE_BASE, projectName, folderName);
     } else {
-      const { projectName, jiraName, description: rawDescription } = await promptWorktreeSmartAdd(mappedProjectName);
+      const {
+        projectName,
+        jiraName,
+        description: rawDescription,
+      } = await promptWorktreeSmartAdd(mappedProjectName);
       const description = rawDescription.trim().replace(/ /g, '_');
       const folderName = jiraName ? `${jiraName}-${description}` : description;
       dir = path.join(WORKTREE_BASE, projectName, folderName);
       branch = `${BRANCH_PREFIX}${folderName}`;
     }
   }
+
+  if (!dir || !branch) throw new GeetError('Worktree folder and branch are required.');
 
   const resolvedDir = path.resolve(dir);
   // Keep the spinner message short: clack redraws it in place, and a line wider
@@ -133,17 +148,17 @@ async function worktreeCreateImpl(introText, options) {
   await postWorktreeCreate(resolvedDir, { skipInit: !options.init });
 }
 
-export function worktreeNewAction(options) {
+export function worktreeNewAction(options: CreateOptions) {
   return worktreeCreateImpl('geet wt new', options);
 }
 
-export function worktreeAddAction(options) {
+export function worktreeAddAction(options: CreateOptions) {
   return worktreeCreateImpl('geet wt add', { ...options, existing: true });
 }
 
 // ── worktree list ─────────────────────────────────────────────────────────────
 
-export async function worktreeListAction(_options) {
+export async function worktreeListAction(_options?: unknown) {
   intro('geet wt list');
 
   const s = spinner();
@@ -176,7 +191,7 @@ export async function worktreeListAction(_options) {
 
 // ── worktree remove ───────────────────────────────────────────────────────────
 
-export async function worktreeRemoveAction(_options) {
+export async function worktreeRemoveAction(_options?: unknown) {
   intro('geet wt remove');
 
   const s = spinner();
@@ -197,7 +212,7 @@ export async function worktreeRemoveAction(_options) {
 
 // ── worktree prune ────────────────────────────────────────────────────────────
 
-export async function worktreePruneAction(_options) {
+export async function worktreePruneAction(_options?: unknown) {
   intro('geet wt prune');
 
   const s = spinner();
@@ -210,7 +225,7 @@ export async function worktreePruneAction(_options) {
   const all = await listWorktrees();
   const removable = all.filter((w) => !w.isMain && w.branch !== '(detached HEAD)');
 
-  const stale = [];
+  const stale: Worktree[] = [];
   for (const w of removable) {
     const exists = await remoteTrackingExists(w.branch);
     if (!exists) stale.push(w);
@@ -228,7 +243,7 @@ export async function worktreePruneAction(_options) {
 
 // ── worktree rename ───────────────────────────────────────────────────────────
 
-export async function worktreeRenameAction(_options) {
+export async function worktreeRenameAction(_options?: unknown) {
   intro('geet wt rename');
 
   const s = spinner();
@@ -250,10 +265,14 @@ export async function worktreeRenameAction(_options) {
   const currentFolderName = path.basename(selected.path);
   const currentProjectName = path.basename(path.dirname(selected.path));
   const jiraMatch = currentFolderName.match(/^([A-Z]+-\d+)-(.+)$/);
-  const currentJiraName = jiraMatch ? jiraMatch[1] : '';
-  const currentDescription = (jiraMatch ? jiraMatch[2] : currentFolderName).replace(/_/g, ' ');
+  const currentJiraName = jiraMatch?.[1] ?? '';
+  const currentDescription = (jiraMatch?.[2] ?? currentFolderName).replace(/_/g, ' ');
 
-  const { projectName, jiraName, description: rawDescription } = await promptWorktreeSmartAdd(null, {
+  const {
+    projectName,
+    jiraName,
+    description: rawDescription,
+  } = await promptWorktreeSmartAdd(undefined, {
     projectName: currentProjectName,
     jiraName: currentJiraName,
     description: currentDescription,
@@ -296,7 +315,7 @@ export async function worktreeRenameAction(_options) {
 
 // ── worktree link-fix ─────────────────────────────────────────────────────────
 
-export async function worktreeLinkFixAction(_options) {
+export async function worktreeLinkFixAction(_options?: unknown) {
   intro('geet wt link-fix');
 
   if (SYMLINK_PATHS.length === 0) {
@@ -312,9 +331,7 @@ export async function worktreeLinkFixAction(_options) {
 
   const mainWorktree = all.find((w) => w.isMain);
   if (!mainWorktree) {
-    const err = new Error();
-    err.gitMessage = 'Could not determine the main worktree.';
-    throw err;
+    throw new GeetError('Could not determine the main worktree.');
   }
 
   const nonMain = all.filter((w) => !w.isMain);
@@ -333,7 +350,7 @@ export async function worktreeLinkFixAction(_options) {
 
 // ── worktree pull ─────────────────────────────────────────────────────────────
 
-export async function worktreePullAction(_options) {
+export async function worktreePullAction(_options?: unknown) {
   intro('geet wt pull');
 
   const s = spinner();
@@ -359,7 +376,7 @@ export async function worktreePullAction(_options) {
 
 // ── worktree merge ────────────────────────────────────────────────────────────
 
-async function guardBeforeMerge() {
+async function guardBeforeMerge(): Promise<void> {
   const changes = await getUncommittedChanges();
   if (changes) {
     logWarn(`Uncommitted changes detected:\n${changes}`);
@@ -380,7 +397,7 @@ async function guardBeforeMerge() {
   }
 }
 
-export async function worktreeMergeAction(options) {
+export async function worktreeMergeAction(options: { pull?: boolean }) {
   intro('geet wt merge');
 
   const s = spinner();
@@ -424,7 +441,7 @@ export async function worktreeMergeAction(options) {
  *   2. Run ~/.geet/init/default.sh (if executable), then ~/.geet/init/<repo-name>.sh (if executable)
  *   3. Spawn an interactive shell in the new directory
  */
-async function postWorktreeCreate(dir, { skipInit = false } = {}) {
+async function postWorktreeCreate(dir: string, { skipInit = false } = {}) {
   const worktrees = await listWorktrees();
   const mainWorktree = worktrees.find((w) => w.isMain);
 
@@ -444,11 +461,13 @@ async function postWorktreeCreate(dir, { skipInit = false } = {}) {
  * its existing one) when GEET_HERDR allows it and we're inside herdr; otherwise
  * — or if herdr fails — spawn a shell in the directory.
  *
- * @param {string} dir               — worktree path
- * @param {string} [mainWorktreePath] — repo root, used as herdr's repo context
- * @param {{ alreadyOpen?: boolean }} [opts]
+ * `dir` is the worktree path; `mainWorktreePath` is the repo root, used as herdr's repo context.
  */
-async function openWorktree(dir, mainWorktreePath, { alreadyOpen = false } = {}) {
+async function openWorktree(
+  dir: string,
+  mainWorktreePath?: string,
+  { alreadyOpen = false }: { alreadyOpen?: boolean } = {},
+) {
   const mode = herdrMode();
 
   if (mode !== 'off' && mainWorktreePath) {
@@ -461,7 +480,7 @@ async function openWorktree(dir, mainWorktreePath, { alreadyOpen = false } = {})
         outro(`${result.alreadyOpen ? 'Switched to' : 'Opened'} herdr workspace: ${label}`);
         return;
       } catch (err) {
-        logWarn(`${err.gitMessage || err.message} — falling back to a shell.`);
+        logWarn(`${userMessage(err)} — falling back to a shell.`);
       }
     }
   }
@@ -474,12 +493,9 @@ async function openWorktree(dir, mainWorktreePath, { alreadyOpen = false } = {})
  * Best-effort lookup of herdr workspaces that are open for the given worktrees.
  * Returns a Map of worktree path → open workspace id. Empty when herdr is off
  * or unreachable.
- *
- * @param {string} [mainWorktreePath]
- * @returns {Promise<Map<string, string>>}
  */
-async function openHerdrWorkspaces(mainWorktreePath) {
-  const open = new Map();
+async function openHerdrWorkspaces(mainWorktreePath?: string): Promise<Map<string, string>> {
+  const open = new Map<string, string>();
   if (herdrMode() === 'off' || !mainWorktreePath) return open;
 
   try {
@@ -492,6 +508,12 @@ async function openHerdrWorkspaces(mainWorktreePath) {
   return open;
 }
 
+interface RemovalPlan {
+  worktree: Worktree;
+  workspaceId: string | null;
+  reset: boolean;
+}
+
 const REMOVAL_COMMANDS = {
   remove: { prompt: 'Select worktrees to remove', done: 'Removed', preselected: false },
   prune: { prompt: 'Select worktrees to prune', done: 'Pruned', preselected: true },
@@ -501,12 +523,12 @@ const REMOVAL_COMMANDS = {
  * Everything `remove` and `prune` have in common once they know their candidate
  * worktrees: pick which to remove, gather every answer up front, remove them,
  * then report. Failures on individual worktrees don't stop the rest.
- *
- * @param {'remove' | 'prune'} command
- * @param {Array<{ path: string, branch: string }>} candidates
- * @param {string} [mainWorktreePath]
  */
-async function removeWorktrees(command, candidates, mainWorktreePath) {
+async function removeWorktrees(
+  command: keyof typeof REMOVAL_COMMANDS,
+  candidates: Worktree[],
+  mainWorktreePath?: string,
+) {
   const { prompt, done, preselected } = REMOVAL_COMMANDS[command];
   const selected = await promptMultiSelectWorktrees(prompt, candidates, { preselected });
 
@@ -519,12 +541,12 @@ async function removeWorktrees(command, candidates, mainWorktreePath) {
     return;
   }
 
-  const failed = [];
+  const failed: { worktree: Worktree; message: string }[] = [];
   for (const plan of plans) {
     try {
       await executeWorktreeRemoval(plan);
     } catch (err) {
-      failed.push({ worktree: plan.worktree, message: err.gitMessage || err.message });
+      failed.push({ worktree: plan.worktree, message: userMessage(err) });
     }
   }
 
@@ -548,14 +570,15 @@ async function removeWorktrees(command, candidates, mainWorktreePath) {
  *   - once: whether to close the open herdr workspaces (never geet's own)
  *   - per worktree with blocking changes: list them, then reset or skip
  *
- * @param {Array<{ path: string, branch: string }>} worktrees
- * @param {Map<string, string>} openWorkspaces  — worktree path → herdr workspace id
- * @returns {Promise<Array<{ worktree: object, workspaceId: string | null, reset: boolean }>>}
- *   plans for the worktrees that should be removed (skipped ones are omitted);
- *   `workspaceId` is set only when that workspace should be closed
+ * `openWorkspaces` maps worktree path → herdr workspace id. Returns plans for the
+ * worktrees that should be removed (skipped ones are omitted); `workspaceId` is
+ * set only when that workspace should be closed.
  */
-async function planWorktreeRemovals(worktrees, openWorkspaces) {
-  const closableId = (w) => {
+async function planWorktreeRemovals(
+  worktrees: Worktree[],
+  openWorkspaces: Map<string, string>,
+): Promise<RemovalPlan[]> {
+  const closableId = (w: Worktree): string | null => {
     const id = openWorkspaces.get(path.resolve(w.path));
     return id && id !== process.env.HERDR_WORKSPACE_ID ? id : null;
   };
@@ -563,12 +586,16 @@ async function planWorktreeRemovals(worktrees, openWorkspaces) {
   const closableCount = worktrees.filter((w) => closableId(w)).length;
   let closeWorkspaces = false;
   if (closableCount === 1) {
-    closeWorkspaces = await promptConfirm('A herdr workspace is open for this worktree. Close it too?');
+    closeWorkspaces = await promptConfirm(
+      'A herdr workspace is open for this worktree. Close it too?',
+    );
   } else if (closableCount > 1) {
-    closeWorkspaces = await promptConfirm(`${closableCount} of these worktrees have an open herdr workspace. Close them too?`);
+    closeWorkspaces = await promptConfirm(
+      `${closableCount} of these worktrees have an open herdr workspace. Close them too?`,
+    );
   }
 
-  const plans = [];
+  const plans: RemovalPlan[] = [];
   for (const worktree of worktrees) {
     const changes = await getWorktreeChanges(worktree.path);
     const reset = changes.length > 0;
@@ -586,7 +613,7 @@ async function planWorktreeRemovals(worktrees, openWorkspaces) {
  * workspace (if planned; failure there is only a warning). Throws if git
  * refuses to reset or remove.
  */
-async function executeWorktreeRemoval({ worktree, workspaceId, reset }) {
+async function executeWorktreeRemoval({ worktree, workspaceId, reset }: RemovalPlan) {
   if (reset) {
     const sReset = spinner();
     sReset.start(`Resetting "${worktree.branch}"...`);
@@ -608,7 +635,7 @@ async function executeWorktreeRemoval({ worktree, workspaceId, reset }) {
     try {
       await closeHerdrWorkspace(workspaceId);
     } catch (err) {
-      logWarn(`Could not close herdr workspace: ${err.gitMessage || err.message}`);
+      logWarn(`Could not close herdr workspace: ${userMessage(err)}`);
     }
   }
 }
@@ -617,7 +644,7 @@ async function executeWorktreeRemoval({ worktree, workspaceId, reset }) {
  * Runs a single init script if it exists and is executable.
  * Streams output into a rolling 4-line window using ANSI cursor control.
  */
-async function runScript(scriptPath, newWorktreeDir) {
+async function runScript(scriptPath: string, newWorktreeDir: string) {
   try {
     await access(scriptPath, constants.X_OK);
   } catch {
@@ -627,7 +654,7 @@ async function runScript(scriptPath, newWorktreeDir) {
   logInfo(`Running init script: ${scriptPath}`);
 
   const TAIL = 4;
-  const lines = [];
+  const lines: string[] = [];
   let windowDrawn = false;
 
   const drawWindow = () => {
@@ -652,6 +679,7 @@ async function runScript(scriptPath, newWorktreeDir) {
 
   try {
     const proc = execa(scriptPath, [], { cwd: newWorktreeDir, all: true });
+    if (!proc.all) throw new Error('script output stream unavailable');
     const rl = createInterface({ input: proc.all, crlfDelay: Infinity });
 
     rl.on('line', (line) => {
@@ -659,22 +687,19 @@ async function runScript(scriptPath, newWorktreeDir) {
       drawWindow();
     });
 
-    await Promise.all([proc, new Promise((resolve) => rl.once('close', resolve))]);
+    await Promise.all([proc, new Promise<void>((resolve) => rl.once('close', resolve))]);
 
     logSuccess('Init script completed.');
   } catch (err) {
-    logError(`Init script failed: ${err.message}`);
+    logError(`Init script failed: ${errorMessage(err)}`);
   }
 }
 
 /**
  * Runs ~/.geet/init/default.sh (if present) then ~/.geet/init/<repo-name>.sh
  * (if present) in the newly created worktree directory.
- *
- * @param {string} mainWorktreePath  — path to the main worktree (repo root)
- * @param {string} newWorktreeDir    — path to the newly created worktree
  */
-async function runInitScript(mainWorktreePath, newWorktreeDir) {
+async function runInitScript(mainWorktreePath: string, newWorktreeDir: string) {
   const initDir = path.join(os.homedir(), '.geet', 'init');
   await runScript(path.join(initDir, 'default.sh'), newWorktreeDir);
 
@@ -686,7 +711,7 @@ async function runInitScript(mainWorktreePath, newWorktreeDir) {
  * Removes existing entries and creates fresh symlinks for each relative path
  * from sourceRoot into targetRoot.
  */
-async function relinkSymlinks(sourceRoot, targetRoot, relativePaths) {
+async function relinkSymlinks(sourceRoot: string, targetRoot: string, relativePaths: string[]) {
   for (const relPath of relativePaths) {
     const src = path.join(sourceRoot, relPath);
     const dest = path.join(targetRoot, relPath);
@@ -703,8 +728,8 @@ async function relinkSymlinks(sourceRoot, targetRoot, relativePaths) {
     try {
       await unlink(dest);
     } catch (err) {
-      if (err.code !== 'ENOENT') {
-        logError(`Failed to remove existing ${relPath}: ${err.message}`);
+      if (errorCode(err) !== 'ENOENT') {
+        logError(`Failed to remove existing ${relPath}: ${errorMessage(err)}`);
         continue;
       }
     }
@@ -713,7 +738,7 @@ async function relinkSymlinks(sourceRoot, targetRoot, relativePaths) {
       await symlink(src, dest);
       logSuccess(`Symlinked: ${relPath}`);
     } catch (err) {
-      logError(`Failed to symlink ${relPath}: ${err.message}`);
+      logError(`Failed to symlink ${relPath}: ${errorMessage(err)}`);
     }
   }
 }
@@ -722,7 +747,7 @@ async function relinkSymlinks(sourceRoot, targetRoot, relativePaths) {
  * Creates soft symlinks for each relative path from sourceRoot into targetRoot.
  * Skips paths that already exist at the destination.
  */
-async function createSymlinks(sourceRoot, targetRoot, relativePaths) {
+async function createSymlinks(sourceRoot: string, targetRoot: string, relativePaths: string[]) {
   for (const relPath of relativePaths) {
     const src = path.join(sourceRoot, relPath);
     const dest = path.join(targetRoot, relPath);
@@ -740,10 +765,10 @@ async function createSymlinks(sourceRoot, targetRoot, relativePaths) {
       await symlink(src, dest);
       logSuccess(`Symlinked: ${relPath}`);
     } catch (err) {
-      if (err.code === 'EEXIST') {
+      if (errorCode(err) === 'EEXIST') {
         logWarn(`Skipped (already exists): ${relPath}`);
       } else {
-        logError(`Failed to symlink ${relPath}: ${err.message}`);
+        logError(`Failed to symlink ${relPath}: ${errorMessage(err)}`);
       }
     }
   }
@@ -752,7 +777,7 @@ async function createSymlinks(sourceRoot, targetRoot, relativePaths) {
 /**
  * Spawns an interactive shell session in the given directory.
  */
-function spawnShellIn(dir) {
+function spawnShellIn(dir: string): void {
   const shell = process.env.SHELL || '/bin/zsh';
   const child = spawn(shell, [], {
     cwd: dir,
@@ -761,7 +786,7 @@ function spawnShellIn(dir) {
   });
 
   child.on('error', (err) => {
-    logError(`Failed to spawn shell: ${err.message}`);
+    logError(`Failed to spawn shell: ${errorMessage(err)}`);
     process.exit(1);
   });
 

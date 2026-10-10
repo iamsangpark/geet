@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * src/index.js
+ * src/index.ts
  * Main CLI entry point for `geet` — a personal git productivity wrapper.
  *
  * Architecture:
@@ -25,14 +25,22 @@
 
 import { createRequire } from 'module';
 import { Command } from 'commander';
+import { GeetError, userMessage } from './errors.ts';
 
 // ── omelette (CJS-only, must use createRequire in ESM) ────────────────────────
 const require = createRequire(import.meta.url);
-const omelette = require('omelette');
+const omelette = require('omelette') as (template: string) => Completion;
+
+interface Completion {
+  on(event: string, handler: (ctx: { reply: (items: string[]) => void }) => void): void;
+  init(): void;
+  setupShellInitFile(): void;
+  cleanupShellInitFile(): void;
+}
 
 // ── Command action imports ────────────────────────────────────────────────────
-import { checkoutAction } from './commands/checkout.js';
-import { stashAction, stashPopAction, stashListPopAction } from './commands/stash.js';
+import { checkoutAction } from './commands/checkout.ts';
+import { stashAction, stashPopAction, stashListPopAction } from './commands/stash.ts';
 import {
   worktreeNewAction,
   worktreeAddAction,
@@ -43,9 +51,9 @@ import {
   worktreeLinkFixAction,
   worktreePullAction,
   worktreeMergeAction,
-} from './commands/worktree.js';
-import { mergeReleaseAction } from './commands/mergeRelease.js';
-import { copyPathAction, copyJiraAction, copyBranchAction } from './commands/copy.js';
+} from './commands/worktree.ts';
+import { mergeReleaseAction } from './commands/mergeRelease.ts';
+import { copyPathAction, copyJiraAction, copyBranchAction } from './commands/copy.ts';
 import {
   configListAction,
   configGlobalAction,
@@ -53,7 +61,7 @@ import {
   configSetAction,
   configInitScriptAction,
   configProjectMapAction,
-} from './commands/config.js';
+} from './commands/config.ts';
 
 // ── Autocompletion Setup ──────────────────────────────────────────────────────
 
@@ -61,7 +69,19 @@ const completion = omelette('geet <command>');
 
 // Top-level subcommand completions
 completion.on('command', ({ reply }) => {
-  reply(['checkout', 'co', 'stash', 'sts', 'worktree', 'wt', 'merge-release', 'config', 'cfg', 'copy', 'cp']);
+  reply([
+    'checkout',
+    'co',
+    'stash',
+    'sts',
+    'worktree',
+    'wt',
+    'merge-release',
+    'config',
+    'cfg',
+    'copy',
+    'cp',
+  ]);
 });
 
 // Subcommand completions for `geet copy <sub>`
@@ -74,7 +94,7 @@ completion.on('stash', ({ reply }) => {
   reply(['pop', 'list']);
 });
 
-// Subcommand completions for `ga worktree <sub>`
+// Subcommand completions for `geet worktree <sub>`
 completion.on('worktree', ({ reply }) => {
   reply(['new', 'add', 'list', 'remove', 'prune', 'rename', 'link-fix', 'pull', 'merge']);
 });
@@ -112,11 +132,14 @@ program
   .name('geet')
   .description('Personal git productivity CLI')
   .version('1.0.0')
-  .addHelpText('after', `
+  .addHelpText(
+    'after',
+    `
 Autocompletion:
   geet --setup-completion     Install tab completion for bash/zsh
   geet --cleanup-completion   Remove tab completion
-`);
+`,
+  );
 
 // ── checkout ──────────────────────────────────────────────────────────────────
 
@@ -154,19 +177,23 @@ stashCmd
 const worktreeCmd = program
   .command('worktree')
   .alias('wt')
-  .description('Manage git worktrees  (subcommands: new, add, list, remove, prune, rename, link-fix, pull, merge)')
+  .description(
+    'Manage git worktrees  (subcommands: new, add, list, remove, prune, rename, link-fix, pull, merge)',
+  )
   .action((options, cmd) => {
     if (cmd.args.length > 0) {
-      const err = new Error();
-      err.gitMessage = `Unknown subcommand: "${cmd.args[0]}". Run "geet worktree --help" to see available subcommands.`;
-      throw err;
+      throw new GeetError(
+        `Unknown subcommand: "${cmd.args[0]}". Run "geet worktree --help" to see available subcommands.`,
+      );
     }
     return worktreeListAction(options);
   });
 
 worktreeCmd
   .command('new')
-  .description('Interactively create a new branch and worktree (use -f and -b together to skip prompts)')
+  .description(
+    'Interactively create a new branch and worktree (use -f and -b together to skip prompts)',
+  )
   .option('-f, --folder <dir>', 'Target directory for the new worktree')
   .option('-b, --branch <branch>', 'Branch name for the new worktree')
   .option('--no-init', 'Skip running init scripts after worktree creation')
@@ -180,7 +207,9 @@ worktreeCmd
 
 worktreeCmd
   .command('list')
-  .description('List worktrees; copies path to clipboard and opens a shell (or herdr workspace when GEET_HERDR is enabled) in selection')
+  .description(
+    'List worktrees; copies path to clipboard and opens a shell (or herdr workspace when GEET_HERDR is enabled) in selection',
+  )
   .action(worktreeListAction);
 
 worktreeCmd
@@ -232,17 +261,16 @@ copyCmd
   .description('Copy the Jira ticket key from the current branch or worktree folder name')
   .action(copyJiraAction);
 
-copyCmd
-  .command('branch')
-  .description('Copy the current branch name')
-  .action(copyBranchAction);
+copyCmd.command('branch').description('Copy the current branch name').action(copyBranchAction);
 
 // ── config ────────────────────────────────────────────────────────────────────
 
 const configCmd = program
   .command('config')
   .alias('cfg')
-  .description('Manage geet config & init scripts  (subcommands: list, global, local, set, init-script, project-map)');
+  .description(
+    'Manage geet config & init scripts  (subcommands: list, global, local, set, init-script, project-map)',
+  );
 
 configCmd
   .command('list')
@@ -267,13 +295,17 @@ configCmd
 
 configCmd
   .command('init-script')
-  .description('Scaffold the worktree init script for this repo (~/.geet/init/<repo>.sh); use -d for the default script')
+  .description(
+    'Scaffold the worktree init script for this repo (~/.geet/init/<repo>.sh); use -d for the default script',
+  )
   .option('-d, --default', 'scaffold the default init script (~/.geet/init/default.sh) instead')
   .action(configInitScriptAction);
 
 configCmd
   .command('project-map')
-  .description('Set the project name for this repo — used by "worktree new" to skip the project name prompt')
+  .description(
+    'Set the project name for this repo — used by "worktree new" to skip the project name prompt',
+  )
   .action(configProjectMapAction);
 
 // ── merge-release ─────────────────────────────────────────────────────────────
@@ -281,10 +313,7 @@ configCmd
 program
   .command('merge-release <source> <dest>')
   .description('Pull both branches and merge <source> into <dest>')
-  .option(
-    '-n, --no-change',
-    'Merge using -X ours --no-commit (staged only, for manual inspection)',
-  )
+  .option('-n, --no-change', 'Merge using -X ours --no-commit (staged only, for manual inspection)')
   .action(mergeReleaseAction);
 
 // ── Parse & Global Error Handler ─────────────────────────────────────────────
@@ -292,7 +321,7 @@ program
 try {
   await program.parseAsync(process.argv);
 } catch (err) {
-  const message = err.gitMessage || err.message || 'An unexpected error occurred.';
+  const message = userMessage(err) || 'An unexpected error occurred.';
   // Use process.stderr directly so the message always appears, even if clack is mid-render
   process.stderr.write(`\n  Error: ${message}\n\n`);
   process.exit(1);

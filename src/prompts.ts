@@ -1,5 +1,5 @@
 /**
- * prompts.js
+ * prompts.ts
  * Reusable @clack/prompts helpers.
  *
  * Key convention: every prompt result must be passed through guardCancel().
@@ -9,10 +9,20 @@
  */
 
 import path from 'path';
-import os from 'os';
 import * as p from '@clack/prompts';
 import search from '@inquirer/search';
-import { CONFIG_KEYS, GLOBAL_CONFIG_PATH, WORKTREE_LIST_SIZE } from './config.js';
+import { CONFIG_KEYS, GLOBAL_CONFIG_PATH, WORKTREE_LIST_SIZE } from './config.ts';
+import type { Stash, Worktree } from './gitUtils.ts';
+
+/** A worktree, optionally annotated with extra hint strings. */
+export type WorktreeOption = Worktree & { decorators?: string[] };
+
+interface SearchOption<T> {
+  value: T;
+  label: string;
+  hint?: string;
+  searchText: string;
+}
 
 // ── Cancel Guard ──────────────────────────────────────────────────────────────
 
@@ -20,22 +30,22 @@ import { CONFIG_KEYS, GLOBAL_CONFIG_PATH, WORKTREE_LIST_SIZE } from './config.js
  * Call immediately after any @clack/prompts prompt.
  * Exits cleanly if the user pressed ESC or Ctrl+C.
  */
-export function guardCancel(value, message = 'Operation cancelled.') {
+export function guardCancel<T>(value: T | symbol, message = 'Operation cancelled.'): T {
   if (p.isCancel(value)) {
     p.cancel(message);
     process.exit(0);
   }
-  return value;
+  return value as T;
 }
 
 // ── Wrappers ──────────────────────────────────────────────────────────────────
 
-export const intro = (title) => p.intro(title);
-export const outro = (msg) => p.outro(msg);
-export const logInfo = (msg) => p.log.info(msg);
-export const logWarn = (msg) => p.log.warn(msg);
-export const logError = (msg) => p.log.error(msg);
-export const logSuccess = (msg) => p.log.success(msg);
+export const intro = (title?: string) => p.intro(title);
+export const outro = (msg?: string) => p.outro(msg);
+export const logInfo = (msg: string) => p.log.info(msg);
+export const logWarn = (msg: string) => p.log.warn(msg);
+export const logError = (msg: string) => p.log.error(msg);
+export const logSuccess = (msg: string) => p.log.success(msg);
 
 /**
  * Creates a spinner. Usage:
@@ -47,7 +57,7 @@ export const spinner = () => p.spinner();
 
 // ── Fuzzy Search Helper ───────────────────────────────────────────────────────
 
-function fuzzyMatch(input, target) {
+function fuzzyMatch(input: string | undefined, target: string): boolean {
   if (!input) return true;
   const q = input.toLowerCase();
   const t = target.toLowerCase();
@@ -58,10 +68,10 @@ function fuzzyMatch(input, target) {
   return qi === q.length;
 }
 
-async function searchSelect(message, options) {
+async function searchSelect<T>(message: string, options: SearchOption<T>[]): Promise<T> {
   // @inquirer/search has no ESC handling, so abort the prompt on a bare Escape keypress
   const controller = new AbortController();
-  const onKeypress = (_str, key) => {
+  const onKeypress = (_str: unknown, key?: { name?: string }) => {
     if (key?.name === 'escape') controller.abort();
   };
   process.stdin.on('keypress', onKeypress);
@@ -79,7 +89,10 @@ async function searchSelect(message, options) {
       { signal: controller.signal },
     );
   } catch (err) {
-    if (err.name === 'ExitPromptError' || err.name === 'AbortPromptError') {
+    if (
+      err instanceof Error &&
+      (err.name === 'ExitPromptError' || err.name === 'AbortPromptError')
+    ) {
       p.cancel('Operation cancelled.');
       process.exit(0);
     }
@@ -93,10 +106,11 @@ async function searchSelect(message, options) {
 
 /**
  * Shown when the user wants to checkout but has uncommitted changes.
- * @returns {'add-and-stash' | 'stash' | 'force'}
  */
-export async function promptUncommittedChanges(branch) {
-  const action = await p.select({
+export async function promptUncommittedChanges(
+  branch?: string,
+): Promise<'add-and-stash' | 'stash' | 'force'> {
+  const action = await p.select<'add-and-stash' | 'stash' | 'force'>({
     message: `You have uncommitted changes. What should happen before checking out ${branch ? `"${branch}"` : 'the branch'}?`,
     options: [
       { value: 'add-and-stash', label: 'Add all untracked files, then stash' },
@@ -109,12 +123,11 @@ export async function promptUncommittedChanges(branch) {
 
 /**
  * Prompts the user to enter a branch name (used when none was provided as an arg).
- * @returns {string}
  */
-export async function promptBranchName() {
+export async function promptBranchName(): Promise<string> {
   const name = await p.text({
     message: 'Branch name:',
-    validate: (v) => (!v.trim() ? 'Branch name cannot be empty.' : undefined),
+    validate: (v) => (!v?.trim() ? 'Branch name cannot be empty.' : undefined),
   });
   return guardCancel(name);
 }
@@ -123,10 +136,11 @@ export async function promptBranchName() {
 
 /**
  * Shown before `stash pop` when there are uncommitted changes.
- * @returns {'add-and-stash' | 'stash-first' | 'pop-anyway'}
  */
-export async function promptUncommittedChangesForPop() {
-  const action = await p.select({
+export async function promptUncommittedChangesForPop(): Promise<
+  'add-and-stash' | 'stash-first' | 'pop-anyway'
+> {
+  const action = await p.select<'add-and-stash' | 'stash-first' | 'pop-anyway'>({
     message: 'You have uncommitted changes. How should we proceed?',
     options: [
       { value: 'add-and-stash', label: 'Add all untracked files, then stash' },
@@ -140,9 +154,8 @@ export async function promptUncommittedChangesForPop() {
 /**
  * Prompts the user for an optional stash message.
  * Empty string means no message (uses git default).
- * @returns {string}
  */
-export async function promptStashMessage() {
+export async function promptStashMessage(): Promise<string> {
   const message = await p.text({
     message: 'Stash message (optional, press Enter to skip):',
     placeholder: 'WIP: my changes',
@@ -152,11 +165,9 @@ export async function promptStashMessage() {
 
 /**
  * Displays all stashes and lets the user select one.
- * @param {Array<{ index: number, name: string, date: string, ref: string }>} stashes
- * @returns {{ index: number, name: string, date: string, ref: string }}
  */
-export async function promptSelectStash(stashes) {
-  const selected = await p.select({
+export async function promptSelectStash(stashes: Stash[]): Promise<Stash> {
+  const selected = await p.select<Stash>({
     message: 'Select a stash to pop:',
     options: stashes.map((s) => ({
       value: s,
@@ -172,9 +183,8 @@ export async function promptSelectStash(stashes) {
 /**
  * Maps a worktree to a prompt option: folder name as the label, branch as the hint.
  * Optional `decorators` (extra strings) are appended to the hint.
- * @param {{ path: string, branch: string, commit: string, isMain: boolean, decorators?: string[] }} w
  */
-function toWorktreeOption(w) {
+function toWorktreeOption(w: WorktreeOption): SearchOption<WorktreeOption> {
   return {
     value: w,
     label: path.basename(w.path),
@@ -185,23 +195,23 @@ function toWorktreeOption(w) {
 
 /**
  * Displays worktrees and lets the user select one.
- * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
- * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
-export async function promptSelectWorktree(worktrees) {
+export async function promptSelectWorktree(worktrees: WorktreeOption[]): Promise<WorktreeOption> {
   return searchSelect('Select a worktree:', worktrees.map(toWorktreeOption));
 }
 
 /**
  * Shown before `worktree remove` / `prune` when a worktree has changes that block removal.
- * @param {string} branch
- * @returns {Promise<'reset' | 'skip'>}
  */
-export async function promptWorktreeChangesForRemove(branch) {
-  const action = await p.select({
+export async function promptWorktreeChangesForRemove(branch: string): Promise<'reset' | 'skip'> {
+  const action = await p.select<'reset' | 'skip'>({
     message: `"${branch}" has changes that prevent removal. How should we proceed?`,
     options: [
-      { value: 'reset', label: 'Reset and remove', hint: 'discards changes and deletes untracked files' },
+      {
+        value: 'reset',
+        label: 'Reset and remove',
+        hint: 'discards changes and deletes untracked files',
+      },
       { value: 'skip', label: 'Skip', hint: 'keep this worktree' },
     ],
   });
@@ -210,31 +220,31 @@ export async function promptWorktreeChangesForRemove(branch) {
 
 /**
  * Displays non-main worktrees and lets the user select one to rename.
- * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
- * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
-export async function promptSelectWorktreeForRename(worktrees) {
+export async function promptSelectWorktreeForRename(
+  worktrees: WorktreeOption[],
+): Promise<WorktreeOption> {
   return searchSelect('Select a worktree to rename:', worktrees.map(toWorktreeOption));
 }
 
 /**
  * Displays non-main worktrees and lets the user select one to re-link.
- * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
- * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
-export async function promptSelectWorktreeForLinkFix(worktrees) {
+export async function promptSelectWorktreeForLinkFix(
+  worktrees: WorktreeOption[],
+): Promise<WorktreeOption> {
   return searchSelect('Select a worktree to re-link:', worktrees.map(toWorktreeOption));
 }
 
 /**
  * Multiselect of worktrees. `preselected` controls whether everything starts checked.
- * @param {string} message
- * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
- * @param {{ preselected?: boolean }} [opts]
- * @returns {Promise<Array<{ path: string, branch: string, commit: string, isMain: boolean }>>}
  */
-export async function promptMultiSelectWorktrees(message, worktrees, { preselected = false } = {}) {
-  const selected = await p.multiselect({
+export async function promptMultiSelectWorktrees(
+  message: string,
+  worktrees: WorktreeOption[],
+  { preselected = false }: { preselected?: boolean } = {},
+): Promise<WorktreeOption[]> {
+  const selected = await p.multiselect<WorktreeOption>({
     message: `${message} (space to toggle, enter to confirm):`,
     options: worktrees.map(toWorktreeOption),
     initialValues: preselected ? worktrees : [],
@@ -244,28 +254,32 @@ export async function promptMultiSelectWorktrees(message, worktrees, { preselect
 
 /**
  * Displays worktrees and lets the user select one to pull latest changes for.
- * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
- * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
-export async function promptSelectWorktreeForPull(worktrees) {
+export async function promptSelectWorktreeForPull(
+  worktrees: WorktreeOption[],
+): Promise<WorktreeOption> {
   return searchSelect('Select a worktree to pull:', worktrees.map(toWorktreeOption));
 }
 
 /**
  * Displays worktrees and lets the user select one to merge into the current branch.
- * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
- * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
  */
-export async function promptSelectWorktreeForMerge(worktrees) {
-  return searchSelect('Select a worktree to merge into the current branch:', worktrees.map(toWorktreeOption));
+export async function promptSelectWorktreeForMerge(
+  worktrees: WorktreeOption[],
+): Promise<WorktreeOption> {
+  return searchSelect(
+    'Select a worktree to merge into the current branch:',
+    worktrees.map(toWorktreeOption),
+  );
 }
 
 /**
  * Shown before `worktree merge` when there are uncommitted changes.
- * @returns {'add-and-stash' | 'stash-first' | 'merge-anyway'}
  */
-export async function promptUncommittedChangesForMerge() {
-  const action = await p.select({
+export async function promptUncommittedChangesForMerge(): Promise<
+  'add-and-stash' | 'stash-first' | 'merge-anyway'
+> {
+  const action = await p.select<'add-and-stash' | 'stash-first' | 'merge-anyway'>({
     message: 'You have uncommitted changes. How should we proceed?',
     options: [
       { value: 'add-and-stash', label: 'Add all untracked files, then stash' },
@@ -277,62 +291,67 @@ export async function promptUncommittedChangesForMerge() {
 }
 
 /**
- * Prompts for smart-add inputs.
+ * Prompts for the inputs to `worktree new` (project, Jira ticket, description).
  * Pass `mappedProjectName` to skip the project name prompt and use the mapping.
- *
- * @param {string} [mappedProjectName]
- * @returns {{ projectName: string, jiraName: string, description: string }}
  */
-export async function promptWorktreeProjectName(mappedProjectName) {
+export async function promptWorktreeProjectName(
+  mappedProjectName?: string,
+): Promise<{ projectName: string }> {
   let projectName = mappedProjectName;
   if (!projectName) {
-    projectName = await p.text({
-      message: 'Project name:',
-      placeholder: 'my-project',
-      validate: (v) => (!v.trim() ? 'Project name cannot be empty.' : undefined),
-    });
-    guardCancel(projectName);
+    projectName = guardCancel(
+      await p.text({
+        message: 'Project name:',
+        placeholder: 'my-project',
+        validate: (v) => (!v?.trim() ? 'Project name cannot be empty.' : undefined),
+      }),
+    );
   }
   return { projectName };
 }
 
-export async function promptWorktreeSmartAdd(mappedProjectName, initialValues = {}) {
+export async function promptWorktreeSmartAdd(
+  mappedProjectName?: string,
+  initialValues: { projectName?: string; jiraName?: string; description?: string } = {},
+): Promise<{ projectName: string; jiraName: string; description: string }> {
   let projectName = mappedProjectName;
 
   if (!projectName) {
-    projectName = await p.text({
-      message: 'Project name:',
-      placeholder: 'my-project',
-      initialValue: initialValues.projectName,
-      validate: (v) => (!v.trim() ? 'Project name cannot be empty.' : undefined),
-    });
-    guardCancel(projectName);
+    projectName = guardCancel(
+      await p.text({
+        message: 'Project name:',
+        placeholder: 'my-project',
+        initialValue: initialValues.projectName,
+        validate: (v) => (!v?.trim() ? 'Project name cannot be empty.' : undefined),
+      }),
+    );
   }
 
-  const jiraName = await p.text({
-    message: 'Jira ticket (optional):',
-    placeholder: 'PROJ-1234',
-    initialValue: initialValues.jiraName,
-  });
-  guardCancel(jiraName);
+  const jiraName = guardCancel(
+    await p.text({
+      message: 'Jira ticket (optional):',
+      placeholder: 'PROJ-1234',
+      initialValue: initialValues.jiraName,
+    }),
+  );
 
-  const description = await p.text({
-    message: 'Short description:',
-    placeholder: 'add-login-page',
-    initialValue: initialValues.description,
-    validate: (v) => (!v.trim() ? 'Description cannot be empty.' : undefined),
-  });
-  guardCancel(description);
+  const description = guardCancel(
+    await p.text({
+      message: 'Short description:',
+      placeholder: 'add-login-page',
+      initialValue: initialValues.description,
+      validate: (v) => (!v?.trim() ? 'Description cannot be empty.' : undefined),
+    }),
+  );
 
-  return { projectName, jiraName: jiraName?.trim() ?? '', description };
+  return { projectName, jiraName: jiraName?.trim() ?? '', description: description };
 }
 
 /**
  * Presents a select list of existing local branches not already in a worktree.
- * @param {string[]} branches
- * @returns {string} selected branch name
+ * Resolves to the selected branch name.
  */
-export async function promptSelectExistingBranch(branches) {
+export async function promptSelectExistingBranch(branches: string[]): Promise<string> {
   return searchSelect(
     'Select existing branch:',
     branches.map((b) => ({ value: b, label: b, searchText: b })),
@@ -345,20 +364,19 @@ export async function promptSelectExistingBranch(branches) {
  * Iterates over all CONFIG_KEYS and prompts the user for each value.
  * `currentValues` pre-fills the text inputs so editing feels natural.
  * Empty inputs are omitted from the returned object.
- *
- * @param {Record<string, string>} currentValues
- * @returns {Promise<Record<string, string>>}
  */
-export async function promptConfigValues(currentValues = {}) {
-  const result = {};
-  for (const { key, label, placeholder, hint } of CONFIG_KEYS) {
-    const value = await p.text({
-      message: `${label}:`,
-      placeholder,
-      hint,
-      initialValue: currentValues[key] ?? '',
-    });
-    guardCancel(value);
+export async function promptConfigValues(
+  currentValues: Record<string, string> = {},
+): Promise<Record<string, string>> {
+  const result: Record<string, string> = {};
+  for (const { key, label, placeholder } of CONFIG_KEYS) {
+    const value = guardCancel(
+      await p.text({
+        message: `${label}:`,
+        placeholder,
+        initialValue: currentValues[key] ?? '',
+      }),
+    );
     const trimmed = value?.trim();
     if (trimmed) result[key] = trimmed;
   }
@@ -368,11 +386,9 @@ export async function promptConfigValues(currentValues = {}) {
 /**
  * Prompts the user to choose which config file to target (all three locations).
  * Returns the absolute path of the chosen file.
- *
- * @returns {Promise<string>}
  */
-export async function promptSelectConfigFile() {
-  const file = await p.select({
+export async function promptSelectConfigFile(): Promise<string> {
+  const file = await p.select<string>({
     message: 'Which config file do you want to update?',
     options: [
       {
@@ -398,11 +414,9 @@ export async function promptSelectConfigFile() {
 /**
  * Prompts the user to choose between `.env` and `.env.local` in the cwd.
  * Used by `config local` where global is not an option.
- *
- * @returns {Promise<string>}
  */
-export async function promptSelectLocalFile() {
-  const file = await p.select({
+export async function promptSelectLocalFile(): Promise<string> {
+  const file = await p.select<string>({
     message: 'Which local config file do you want to create/update?',
     options: [
       {
@@ -423,12 +437,12 @@ export async function promptSelectLocalFile() {
 /**
  * Prompts the user to choose a single config key to update.
  * `currentValues` is shown as hints so the user can see what's set.
- *
- * @param {Record<string, string>} currentValues
- * @returns {Promise<string>}  — the chosen key string (e.g. 'GEET_BRANCH_PREFIX')
+ * Resolves to the chosen key string (e.g. 'GEET_BRANCH_PREFIX').
  */
-export async function promptSelectConfigKey(currentValues = {}) {
-  const key = await p.select({
+export async function promptSelectConfigKey(
+  currentValues: Record<string, string> = {},
+): Promise<string> {
+  const key = await p.select<string>({
     message: 'Which setting do you want to update?',
     options: CONFIG_KEYS.map(({ key: k, label }) => ({
       value: k,
@@ -441,11 +455,8 @@ export async function promptSelectConfigKey(currentValues = {}) {
 
 /**
  * Prompts the user to confirm an action (yes/no).
- *
- * @param {string} message
- * @returns {Promise<boolean>}
  */
-export async function promptConfirm(message) {
+export async function promptConfirm(message: string): Promise<boolean> {
   const confirmed = await p.confirm({ message });
   return guardCancel(confirmed);
 }
@@ -453,24 +464,20 @@ export async function promptConfirm(message) {
 /**
  * Prompts for an optional init-script source file path.
  * An empty value means "generate a stub template".
- *
- * @returns {Promise<string>}
  */
-export async function promptInitScriptSource() {
+export async function promptInitScriptSource(): Promise<string> {
   const src = await p.text({
     message: 'Path to an existing script to copy/move (leave empty to generate a stub):',
     placeholder: '~/scripts/my-init.sh',
   });
-  return guardCancel(src) ?? '';
+  return guardCancel<string | undefined>(src) ?? '';
 }
 
 /**
  * When an init script already exists, ask what to do.
- *
- * @returns {Promise<'override' | 'skip'>}
  */
-export async function promptOverrideOrSkip() {
-  const action = await p.select({
+export async function promptOverrideOrSkip(): Promise<'edit' | 'override' | 'skip'> {
+  const action = await p.select<'edit' | 'override' | 'skip'>({
     message: 'An init script already exists for this repo. What should we do?',
     options: [
       { value: 'edit', label: 'Edit', hint: 'open the existing script in $EDITOR' },
@@ -483,12 +490,10 @@ export async function promptOverrideOrSkip() {
 
 /**
  * Ask whether to open a worktree as a herdr workspace or a plain shell.
- *
- * @param {boolean} alreadyOpen  — a herdr workspace already exists for the worktree
- * @returns {Promise<'herdr' | 'shell'>}
+ * `alreadyOpen`: a herdr workspace already exists for the worktree.
  */
-export async function promptHerdrOpen(alreadyOpen) {
-  const action = await p.select({
+export async function promptHerdrOpen(alreadyOpen: boolean): Promise<'herdr' | 'shell'> {
+  const action = await p.select<'herdr' | 'shell'>({
     message: 'Open worktree:',
     options: [
       alreadyOpen
@@ -502,11 +507,9 @@ export async function promptHerdrOpen(alreadyOpen) {
 
 /**
  * When a source file is provided, ask whether to copy or move it.
- *
- * @returns {Promise<'copy' | 'move'>}
  */
-export async function promptCopyOrMove() {
-  const action = await p.select({
+export async function promptCopyOrMove(): Promise<'copy' | 'move'> {
+  const action = await p.select<'copy' | 'move'>({
     message: 'Copy or move the source file into ~/.geet/init/?',
     options: [
       { value: 'copy', label: 'Copy', hint: 'keep the original in place' },

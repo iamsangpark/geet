@@ -1,11 +1,26 @@
 /**
- * gitUtils.js
+ * gitUtils.ts
  * All git subprocess operations via execa.
  * Every exported function returns structured data or throws an Error
  * with a `.gitMessage` property containing a clean, user-facing message.
  */
 
-import { execa } from 'execa';
+import { execa, type Options } from 'execa';
+import { GeetError } from './errors.ts';
+
+export interface Worktree {
+  path: string;
+  commit: string;
+  branch: string;
+  isMain: boolean;
+}
+
+export interface Stash {
+  index: number;
+  name: string;
+  date: string;
+  ref: string;
+}
 
 // ── Error Handling ────────────────────────────────────────────────────────────
 
@@ -13,27 +28,27 @@ import { execa } from 'execa';
  * Converts a raw execa error into a clean Error with a .gitMessage property.
  * Strips ANSI codes and noisy prefixes like "error:" and "fatal:".
  */
-function parseGitError(err) {
-  const raw = err.stderr || err.stdout || err.message || 'Unknown git error';
+export function parseGitError(err: unknown): GeetError {
+  const e = err as { stderr?: string; stdout?: string; message?: string };
+  const raw = e.stderr || e.stdout || e.message || 'Unknown git error';
   const clean = raw
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\[[0-9;]*m/g, '') // strip ANSI color codes
     .split('\n')
-    .map(line => line.replace(/^(error|fatal|hint):\s*/i, '').trim())
+    .map((line) => line.replace(/^(error|fatal|hint):\s*/i, '').trim())
     .filter(Boolean)
     .join('\n');
 
-  const error = new Error(clean);
-  error.gitMessage = clean;
-  return error;
+  return new GeetError(clean);
 }
 
 /**
  * Run a git command. Returns stdout string on success, throws cleaned Error on failure.
  */
-async function git(args, options = {}) {
+async function git(args: string[], options: Options = {}): Promise<string> {
   try {
     const result = await execa('git', args, { reject: true, ...options });
-    return result.stdout;
+    return String(result.stdout);
   } catch (err) {
     throw parseGitError(err);
   }
@@ -45,24 +60,27 @@ async function git(args, options = {}) {
  * Returns the raw `git status --porcelain` output.
  * Empty string means the working tree is clean.
  */
-export async function getUncommittedChanges() {
+export async function getUncommittedChanges(): Promise<string> {
   return git(['status', '--porcelain']);
 }
 
 /**
  * Returns the name of the currently checked-out branch.
  */
-export async function getCurrentBranch() {
+export async function getCurrentBranch(): Promise<string> {
   return git(['rev-parse', '--abbrev-ref', 'HEAD']);
 }
 
 /**
  * Checks whether a branch exists locally and/or remotely.
- * @returns {{ local: boolean, remote: boolean }}
  */
-export async function branchExists(branch) {
-  const local = await execa('git', ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], { reject: false });
-  const remote = await execa('git', ['ls-remote', '--exit-code', '--heads', 'origin', branch], { reject: false });
+export async function branchExists(branch: string): Promise<{ local: boolean; remote: boolean }> {
+  const local = await execa('git', ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], {
+    reject: false,
+  });
+  const remote = await execa('git', ['ls-remote', '--exit-code', '--heads', 'origin', branch], {
+    reject: false,
+  });
   return {
     local: local.exitCode === 0,
     remote: remote.exitCode === 0,
@@ -72,14 +90,14 @@ export async function branchExists(branch) {
 /**
  * Fetches all remotes.
  */
-export async function fetchAll() {
+export async function fetchAll(): Promise<string> {
   return git(['fetch', '--all']);
 }
 
 /**
  * Fetches and prunes stale remote-tracking branches.
  */
-export async function fetchPrune() {
+export async function fetchPrune(): Promise<string> {
   return git(['fetch', '--prune']);
 }
 
@@ -87,9 +105,10 @@ export async function fetchPrune() {
  * Returns true if origin/<branch> still exists as a remote-tracking ref.
  * Call after fetchPrune() so the local refs are up to date.
  */
-export async function remoteTrackingExists(branch) {
+export async function remoteTrackingExists(branch: string): Promise<boolean> {
   const result = await execa(
-    'git', ['show-ref', '--verify', '--quiet', `refs/remotes/origin/${branch}`],
+    'git',
+    ['show-ref', '--verify', '--quiet', `refs/remotes/origin/${branch}`],
     { reject: false },
   );
   return result.exitCode === 0;
@@ -97,15 +116,15 @@ export async function remoteTrackingExists(branch) {
 
 // ── Checkout ─────────────────────────────────────────────────────────────────
 
-export async function checkoutBranch(branch) {
+export async function checkoutBranch(branch: string) {
   return git(['checkout', branch]);
 }
 
-export async function checkoutNewBranch(branch) {
+export async function checkoutNewBranch(branch: string) {
   return git(['checkout', '-b', branch]);
 }
 
-export async function checkoutForce(branch) {
+export async function checkoutForce(branch: string) {
   return git(['checkout', '--force', branch]);
 }
 
@@ -121,7 +140,7 @@ export async function gitAddAll() {
   return git(['add', '-A']);
 }
 
-export async function stashSave(message) {
+export async function stashSave(message?: string) {
   if (message) {
     return git(['stash', 'push', '-m', message]);
   }
@@ -132,19 +151,14 @@ export async function stashPop() {
   return git(['stash', 'pop']);
 }
 
-export async function stashApply(index) {
-  return git(['stash', 'apply', `stash@{${index}}`]);
-}
-
-export async function stashPopIndex(index) {
+export async function stashPopIndex(index: number) {
   return git(['stash', 'pop', `stash@{${index}}`]);
 }
 
 /**
  * Lists all stashes.
- * @returns {Array<{ index: number, name: string, date: string, ref: string }>}
  */
-export async function listStashes() {
+export async function listStashes(): Promise<Stash[]> {
   const stdout = await git(['stash', 'list', '--format=%gd|%s|%ci']);
   if (!stdout.trim()) return [];
 
@@ -152,11 +166,11 @@ export async function listStashes() {
     .trim()
     .split('\n')
     .filter(Boolean)
-    .map(line => {
-      const [ref, name, date] = line.split('|');
+    .map((line) => {
+      const [ref = '', name = '', date = ''] = line.split('|');
       const match = ref.match(/\{(\d+)\}/);
-      const index = match ? parseInt(match[1], 10) : 0;
-      return { index, name: name?.trim() ?? '', date: date?.trim() ?? '', ref: ref?.trim() ?? '' };
+      const index = match?.[1] ? parseInt(match[1], 10) : 0;
+      return { index, name: name.trim(), date: date.trim(), ref: ref.trim() };
     });
 }
 
@@ -165,9 +179,12 @@ export async function listStashes() {
 /**
  * Returns local branch names that are not already checked out in any worktree.
  */
-export async function listLocalBranches() {
+export async function listLocalBranches(): Promise<string[]> {
   const result = await git(['branch', '--format=%(refname:short)']);
-  const all = result.split('\n').map((b) => b.trim()).filter(Boolean);
+  const all = result
+    .split('\n')
+    .map((b) => b.trim())
+    .filter(Boolean);
   const worktrees = await listWorktrees();
   const inUse = new Set(worktrees.map((w) => w.branch));
   return all.filter((b) => !inUse.has(b));
@@ -176,7 +193,7 @@ export async function listLocalBranches() {
 /**
  * Adds a worktree. If the branch doesn't exist locally, creates it with -b.
  */
-export async function addWorktree(branch, dir) {
+export async function addWorktree(branch: string, dir: string) {
   const { local } = await branchExists(branch);
   if (local) {
     return git(['worktree', 'add', dir, branch]);
@@ -187,16 +204,15 @@ export async function addWorktree(branch, dir) {
 /**
  * Removes a worktree at the given path.
  */
-export async function removeWorktree(dir) {
+export async function removeWorktree(dir: string) {
   return git(['worktree', 'remove', dir]);
 }
 
 /**
  * Returns the `git status --porcelain` lines for a worktree, listing individual
  * untracked files. Empty array means nothing would block `worktree remove`.
- * @returns {Promise<string[]>}
  */
-export async function getWorktreeChanges(dir) {
+export async function getWorktreeChanges(dir: string): Promise<string[]> {
   const stdout = await git(['status', '--porcelain', '--untracked-files=all'], { cwd: dir });
   return stdout.split('\n').filter(Boolean);
 }
@@ -205,7 +221,7 @@ export async function getWorktreeChanges(dir) {
  * Discards all tracked changes and deletes untracked files in a worktree.
  * Gitignored files are left alone (they don't block `worktree remove`).
  */
-export async function resetWorktree(dir) {
+export async function resetWorktree(dir: string) {
   await git(['reset', '--hard'], { cwd: dir });
   await git(['clean', '-fd'], { cwd: dir });
 }
@@ -213,36 +229,35 @@ export async function resetWorktree(dir) {
 /**
  * Moves a worktree from oldPath to newPath.
  */
-export async function moveWorktree(oldPath, newPath) {
+export async function moveWorktree(oldPath: string, newPath: string) {
   return git(['worktree', 'move', oldPath, newPath]);
 }
 
 /**
  * Creates a new branch and checks it out inside an existing worktree directory.
  */
-export async function checkoutNewBranchInDir(branch, dir) {
+export async function checkoutNewBranchInDir(branch: string, dir: string) {
   return git(['checkout', '-b', branch], { cwd: dir });
 }
 
 /**
  * Deletes a local branch (requires it to be fully merged, use -D to force).
  */
-export async function deleteBranch(branch, force = false) {
+export async function deleteBranch(branch: string, force = false) {
   return git(['branch', force ? '-D' : '-d', branch]);
 }
 
 /**
  * Lists all worktrees by parsing `git worktree list --porcelain`.
- * @returns {Array<{ path: string, branch: string, commit: string, isMain: boolean }>}
  */
-export async function listWorktrees() {
+export async function listWorktrees(): Promise<Worktree[]> {
   const stdout = await git(['worktree', 'list', '--porcelain']);
   if (!stdout.trim()) return [];
 
   const blocks = stdout.trim().split('\n\n').filter(Boolean);
   return blocks.map((block, i) => {
     const lines = block.trim().split('\n');
-    const entry = {};
+    const entry: Record<string, string | true> = {};
     for (const line of lines) {
       const spaceIdx = line.indexOf(' ');
       if (spaceIdx === -1) {
@@ -254,9 +269,12 @@ export async function listWorktrees() {
       }
     }
     return {
-      path: entry.worktree ?? '',
-      commit: entry.head ?? '',
-      branch: entry.branch?.replace('refs/heads/', '') ?? '(detached HEAD)',
+      path: typeof entry.worktree === 'string' ? entry.worktree : '',
+      commit: typeof entry.head === 'string' ? entry.head : '',
+      branch:
+        typeof entry.branch === 'string'
+          ? entry.branch.replace('refs/heads/', '')
+          : '(detached HEAD)',
       isMain: i === 0,
     };
   });
@@ -268,7 +286,7 @@ export async function listWorktrees() {
  * Pulls the latest changes for a branch using fetch + merge of origin/<branch>.
  * Stays on the current branch — does not switch.
  */
-export async function pullBranch(branch) {
+export async function pullBranch(branch: string): Promise<void> {
   await fetchAll();
   const current = await getCurrentBranch();
 
@@ -282,10 +300,11 @@ export async function pullBranch(branch) {
 
 /**
  * Merges the source branch into the current branch.
- * @param {string} source
- * @param {{ noCommit?: boolean, strategy?: 'ours' | null }} opts
  */
-export async function mergeBranch(source, opts = {}) {
+export async function mergeBranch(
+  source: string,
+  opts: { noCommit?: boolean; strategy?: 'ours' | null } = {},
+) {
   const args = ['merge'];
   if (opts.strategy === 'ours') args.push('-X', 'ours');
   if (opts.noCommit) args.push('--no-commit');
@@ -296,6 +315,6 @@ export async function mergeBranch(source, opts = {}) {
 /**
  * Returns the diff between the local branch and its origin counterpart.
  */
-export async function getDiffVsOrigin(branch) {
+export async function getDiffVsOrigin(branch: string) {
   return git(['diff', `origin/${branch}`]);
 }

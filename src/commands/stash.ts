@@ -1,9 +1,9 @@
 /**
- * commands/stash.js
+ * commands/stash.ts
  * Implements:
- *   ga stash [message]      — stash with optional message
- *   ga stash pop            — pop with uncommitted-change guard
- *   ga stash list-pop       — interactive stash picker with guard
+ *   geet stash [message]    — stash with optional message
+ *   geet stash pop          — pop with uncommitted-change guard
+ *   geet stash list         — interactive stash picker with guard
  */
 
 import {
@@ -13,7 +13,7 @@ import {
   stashPopIndex,
   listStashes,
   gitAddAll,
-} from '../gitUtils.js';
+} from '../gitUtils.ts';
 
 import {
   intro,
@@ -24,7 +24,7 @@ import {
   promptUncommittedChangesForPop,
   promptSelectStash,
   promptStashMessage,
-} from '../prompts.js';
+} from '../prompts.ts';
 
 // ── Shared: uncommitted-change guard before popping ───────────────────────────
 
@@ -51,7 +51,7 @@ async function guardBeforePop() {
 
 // ── stash ─────────────────────────────────────────────────────────────────────
 
-export async function stashAction(options) {
+export async function stashAction(options: { message?: string; keepUntracked?: boolean }) {
   intro('geet stash');
 
   // Use -m flag if provided, otherwise prompt (empty = no message)
@@ -70,7 +70,7 @@ export async function stashAction(options) {
 
 // ── stash pop ─────────────────────────────────────────────────────────────────
 
-export async function stashPopAction(_options) {
+export async function stashPopAction(_options?: unknown) {
   intro('geet sts pop');
 
   await guardBeforePop();
@@ -85,7 +85,7 @@ export async function stashPopAction(_options) {
 
 // ── stash list-pop ────────────────────────────────────────────────────────────
 
-export async function stashListPopAction(_options) {
+export async function stashListPopAction(_options?: unknown) {
   intro('geet stash list');
 
   const s = spinner();

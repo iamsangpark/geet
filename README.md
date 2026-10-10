@@ -46,9 +46,9 @@ Stash your changes, **including untracked files** (they are staged with `git add
 
 Prompts for a stash message unless `-m` is given. Subcommands: `pop`, `list`.
 
-| Flag | Description |
-|---|---|
-| `-m, --message <msg>` | Stash message (skips the prompt). |
+| Flag                   | Description                                                         |
+| ---------------------- | ------------------------------------------------------------------- |
+| `-m, --message <msg>`  | Stash message (skips the prompt).                                   |
 | `-k, --keep-untracked` | Leave untracked files in the working tree instead of stashing them. |
 
 ```sh
@@ -112,11 +112,11 @@ Interactively create a **new branch and worktree** at a standardized path:
 
 The branch is named `<GEET_BRANCH_PREFIX><jiraName>-<description>`. Spaces in the description become `_`, and the Jira ticket is optional. If the repo has a [project mapping](#geet-config-project-map), the project name prompt is pre-filled.
 
-| Flag | Description |
-|---|---|
-| `-f, --folder <dir>` | Target directory for the new worktree. |
-| `-b, --branch <branch>` | Branch name for the new worktree. |
-| `--no-init` | Skip running init scripts after creation. |
+| Flag                    | Description                               |
+| ----------------------- | ----------------------------------------- |
+| `-f, --folder <dir>`    | Target directory for the new worktree.    |
+| `-b, --branch <branch>` | Branch name for the new worktree.         |
+| `--no-init`             | Skip running init scripts after creation. |
 
 Pass both `-f` and `-b` to skip all prompts.
 
@@ -136,8 +136,8 @@ geet wt new -f ~/worktrees/my-app/hotfix -b hotfix --no-init
 
 Check out an **existing local branch** as a new worktree. Lists local branches that aren't already checked out, then asks for the project name. The folder name is the branch name with `GEET_BRANCH_PREFIX` stripped.
 
-| Flag | Description |
-|---|---|
+| Flag        | Description                               |
+| ----------- | ----------------------------------------- |
 | `--no-init` | Skip running init scripts after creation. |
 
 ```sh
@@ -211,8 +211,8 @@ geet wt pull
 
 Select a worktree branch to merge into the **current branch**. If you have uncommitted changes, prompts you to add all & stash, stash, or merge anyway.
 
-| Flag | Description |
-|---|---|
+| Flag         | Description                                          |
+| ------------ | ---------------------------------------------------- |
 | `-p, --pull` | Pull the selected branch from origin before merging. |
 
 ```sh
@@ -226,11 +226,11 @@ geet wt merge -p
 
 Copy information about the current repo to the clipboard. Subcommands: `path` (alias `worktree`), `jira`, `branch`.
 
-| Command | Copies |
-|---|---|
-| `geet copy path` / `geet copy worktree` | The folder path of the worktree you're in (replaces the old `geet wt copy-path`) |
-| `geet copy jira` | The Jira ticket key (e.g. `PROJ-1234`), found in the current branch name or, failing that, the worktree folder name |
-| `geet copy branch` | The current branch name |
+| Command                                 | Copies                                                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `geet copy path` / `geet copy worktree` | The folder path of the worktree you're in (replaces the old `geet wt copy-path`)                                    |
+| `geet copy jira`                        | The Jira ticket key (e.g. `PROJ-1234`), found in the current branch name or, failing that, the worktree folder name |
+| `geet copy branch`                      | The current branch name                                                                                             |
 
 ```sh
 geet cp path
@@ -264,8 +264,8 @@ Update a single config key in a file you choose.
 
 Scaffold the init script for the current repo at `~/.geet/init/<repo-name>.sh`. Lets you start from a stub or copy/move an existing script, marks it executable, and opens it in `$EDITOR`. If the script already exists you can override, edit, or skip.
 
-| Flag | Description |
-|---|---|
+| Flag            | Description                                                       |
+| --------------- | ----------------------------------------------------------------- |
 | `-d, --default` | Scaffold `~/.geet/init/default.sh` (runs for every repo) instead. |
 
 ```sh
@@ -289,8 +289,8 @@ geet merge-release release/1.2.0 develop
 
 **Options:**
 
-| Flag | Description |
-|---|---|
+| Flag              | Description                                                                                    |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
 | `-n, --no-change` | Merge using `-X ours --no-commit` — stages the merge for manual inspection without committing. |
 
 ```sh
@@ -309,13 +309,13 @@ Config values are loaded from the following sources, lowest to highest priority:
 3. `.env.local` — local overrides (don't commit)
 4. `process.env` — shell environment
 
-| Key | Default | Description |
-|---|---|---|
-| `GEET_WORKTREE_BASE` | `~/worktrees` | Base directory for worktrees created by `worktree new` / `add`. |
-| `GEET_BRANCH_PREFIX` | *(none)* | Prefix prepended to branch names created by `worktree new`. |
-| `GEET_SYMLINK_PATHS` | *(none)* | Comma-separated relative paths symlinked from the main worktree into each new worktree. |
-| `GEET_HERDR` | `off` | `off`, `prompt` or `auto` — open worktrees as [herdr](https://herdr.dev) workspaces. See [herdr integration](#herdr-integration). |
-| `GEET_WORKTREE_LIST_SIZE` | `10` | Rows visible in searchable selection lists (worktrees, branches). `0` shows every item instead of a scrolling list. Press ESC to cancel a selection. |
+| Key                       | Default       | Description                                                                                                                                          |
+| ------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GEET_WORKTREE_BASE`      | `~/worktrees` | Base directory for worktrees created by `worktree new` / `add`.                                                                                      |
+| `GEET_BRANCH_PREFIX`      | _(none)_      | Prefix prepended to branch names created by `worktree new`.                                                                                          |
+| `GEET_SYMLINK_PATHS`      | _(none)_      | Comma-separated relative paths symlinked from the main worktree into each new worktree.                                                              |
+| `GEET_HERDR`              | `off`         | `off`, `prompt` or `auto` — open worktrees as [herdr](https://herdr.dev) workspaces. See [herdr integration](#herdr-integration).                    |
+| `GEET_WORKTREE_LIST_SIZE` | `10`          | Rows visible in searchable selection lists (worktrees, branches). `0` shows every item instead of a scrolling list. Press ESC to cancel a selection. |
 
 ```sh
 # ~/.geet/config
@@ -371,15 +371,35 @@ After setup, pressing Tab after `geet ` will complete subcommands and aliases.
 
 ```
 src/
-├── index.js              # CLI entry point (commander + omelette)
-├── config.js             # Config loader (~/.geet/config → .env → .env.local → process.env)
-├── gitUtils.js           # All git operations via execa
-├── prompts.js            # @clack/prompts helpers
+├── index.ts              # CLI entry point (commander + omelette)
+├── config.ts             # Config loader (~/.geet/config → .env → .env.local → process.env)
+├── errors.ts             # GeetError + error helpers
+├── gitUtils.ts           # All git operations via execa
+├── herdrUtils.ts         # herdr CLI calls via execa
+├── prompts.ts            # @clack/prompts helpers
 └── commands/
-    ├── checkout.js
-    ├── stash.js
-    ├── worktree.js
-    ├── copy.js
-    ├── config.js
-    └── mergeRelease.js
+    ├── checkout.ts
+    ├── stash.ts
+    ├── worktree.ts
+    ├── copy.ts
+    ├── config.ts
+    └── mergeRelease.ts
 ```
+
+---
+
+## Development
+
+Source is TypeScript in `src/`, compiled by `tsc` to `dist/` (which `geet` runs).
+
+```sh
+npm install          # also builds, via the `prepare` script
+npm run build        # compile src/ → dist/ (re-run after editing source)
+npm run dev          # run src/index.ts directly, no build
+npm run typecheck    # tsc --noEmit (src + test)
+npm run lint         # oxlint
+npm run format       # oxfmt (use `format:check` to verify only)
+npm test             # vitest
+```
+
+CI runs typecheck, lint, format check, tests and build on every pull request and on pushes to `main`.

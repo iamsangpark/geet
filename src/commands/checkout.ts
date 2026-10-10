@@ -1,6 +1,6 @@
 /**
- * commands/checkout.js
- * Implements `ga checkout [branch]` with uncommitted-change safety.
+ * commands/checkout.ts
+ * Implements `geet checkout [branch]` with uncommitted-change safety.
  */
 
 import {
@@ -11,7 +11,7 @@ import {
   checkoutForce,
   stashSave,
   gitAddAll,
-} from '../gitUtils.js';
+} from '../gitUtils.ts';
 
 import {
   intro,
@@ -21,9 +21,9 @@ import {
   spinner,
   promptUncommittedChanges,
   promptBranchName,
-} from '../prompts.js';
+} from '../prompts.ts';
 
-export async function checkoutAction(branch, _options) {
+export async function checkoutAction(branch?: string, _options?: unknown) {
   intro('geet co');
 
   // If no branch arg, prompt for one
@@ -56,7 +56,7 @@ export async function checkoutAction(branch, _options) {
   }
 
   // Determine how to checkout
-  const s = (await import('../prompts.js')).spinner();
+  const s = (await import('../prompts.ts')).spinner();
   s.start(`Switching to "${branch}"...`);
 
   if (useForce) {

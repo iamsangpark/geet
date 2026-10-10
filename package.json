@@ -2,12 +2,20 @@
   "name": "geet",
   "version": "1.2.0",
   "description": "Personal git productivity CLI",
-  "type": "module",
   "bin": {
-    "geet": "./src/index.js"
+    "geet": "./dist/index.js"
   },
+  "type": "module",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node dist/index.js",
+    "dev": "node src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "test": "vitest run"
   },
   "dependencies": {
     "@clack/prompts": "^0.9.1",
@@ -17,6 +25,13 @@
     "dotenv": "^17.4.2",
     "execa": "^9.0.0",
     "omelette": "^0.4.17"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
   },
   "engines": {
     "node": ">=24.0.0"
