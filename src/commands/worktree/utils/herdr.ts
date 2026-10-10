@@ -39,6 +39,7 @@ interface HerdrResult {
   worktrees?: HerdrWorktree[];
   workspace?: { workspace_id: string };
   panes?: { pane_id: string }[];
+  workspaces?: { workspace_id: string }[];
   already_open?: boolean;
 }
 
@@ -128,4 +129,15 @@ export async function firstHerdrPane(workspaceId: string): Promise<string> {
   const pane = result.panes?.[0];
   if (!pane) throw herdrError('workspace has no panes');
   return pane.pane_id;
+}
+
+/** Ids of every open herdr workspace, in herdr's order. */
+export async function listHerdrWorkspaces(): Promise<string[]> {
+  const result = await herdr(['workspace', 'list']);
+  return (result.workspaces ?? []).map((w) => w.workspace_id);
+}
+
+/** Focuses (switches to) a herdr workspace. */
+export async function focusHerdrWorkspace(workspaceId: string): Promise<void> {
+  await herdr(['workspace', 'focus', workspaceId]);
 }

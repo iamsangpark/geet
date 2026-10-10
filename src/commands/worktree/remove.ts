@@ -6,6 +6,7 @@
  */
 
 import path from 'path';
+import { realpath } from 'fs/promises';
 import { userMessage } from '../../utils/errors.ts';
 import {
   type Worktree,
@@ -29,7 +30,13 @@ import {
   promptWorktreeChangesForRemove,
   promptMultiSelectWorktrees,
 } from '../../prompts/worktree.ts';
-import { closeHerdrWorkspace } from './utils/herdr.ts';
+import {
+  closeHerdrWorkspace,
+  focusHerdrWorkspace,
+  herdrMode,
+  listHerdrWorkspaces,
+} from './utils/herdr.ts';
+import { spawnShellIn } from './utils/shell.ts';
 import { loadWorktrees } from './utils/loadWorktrees.ts';
 import { openHerdrWorkspaces } from './utils/openWorktree.ts';
 
@@ -113,9 +120,15 @@ async function removeWorktrees(
     return;
   }
 
+  // The worktree we're standing in goes last, after stepping out of it, so the
+  // other removals (and git itself) never run from a directory that's about to vanish.
+  const currentPlan = await findCurrentPlan(plans);
+  const ordered = currentPlan ? [...plans.filter((p) => p !== currentPlan), currentPlan] : plans;
+
   const failed: { worktree: Worktree; message: string }[] = [];
-  for (const plan of plans) {
+  for (const plan of ordered) {
     try {
+      if (plan === currentPlan && mainWorktreePath) process.chdir(mainWorktreePath);
       await executeWorktreeRemoval(plan);
     } catch (err) {
       failed.push({ worktree: plan.worktree, message: userMessage(err) });
@@ -130,10 +143,52 @@ async function removeWorktrees(
       logError(`  ${worktree.branch} (${worktree.path}): ${message}`);
     }
     outro(`geet wt ${command} completed with errors.`);
-    return;
+  } else {
+    outro(`${done} ${doneCount} worktree(s).`);
   }
 
-  outro(`${done} ${doneCount} worktree(s).`);
+  if (currentPlan && mainWorktreePath && !failed.some((f) => f.worktree === currentPlan.worktree)) {
+    await leaveRemovedWorktree(mainWorktreePath, openWorkspaces);
+  }
+}
+
+/** The plan for the worktree geet was launched from, if it's being removed. */
+async function findCurrentPlan(plans: RemovalPlan[]): Promise<RemovalPlan | undefined> {
+  const cwd = await realpath(process.cwd()).catch(() => process.cwd());
+  for (const plan of plans) {
+    const dir = await realpath(plan.worktree.path).catch(() => path.resolve(plan.worktree.path));
+    const rel = path.relative(dir, cwd);
+    if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) return plan;
+  }
+  return undefined;
+}
+
+/**
+ * After removing the worktree we were running in, get the user somewhere real:
+ *   - in herdr: focus the base worktree's workspace if open, else the first other
+ *     workspace, then close the now-dead one (this ends geet, so it comes last)
+ *   - otherwise (not in herdr, no other workspace, or herdr failed): a shell in
+ *     the base worktree folder
+ */
+async function leaveRemovedWorktree(mainWorktreePath: string, openWorkspaces: Map<string, string>) {
+  const currentId = process.env.HERDR_WORKSPACE_ID;
+  if (herdrMode() !== 'off' && currentId) {
+    try {
+      const baseId = openWorkspaces.get(path.resolve(mainWorktreePath));
+      const targetId =
+        baseId && baseId !== currentId
+          ? baseId
+          : (await listHerdrWorkspaces()).find((id) => id !== currentId);
+      if (targetId) {
+        await focusHerdrWorkspace(targetId);
+        await closeHerdrWorkspace(currentId);
+        return;
+      }
+    } catch (err) {
+      logWarn(`${userMessage(err)} — opening a shell in the base worktree instead.`);
+    }
+  }
+  spawnShellIn(mainWorktreePath);
 }
 
 /**

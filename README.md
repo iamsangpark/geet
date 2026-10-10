@@ -97,8 +97,8 @@ After a worktree is created (`new` / `add`), geet:
 
 1. Copies the worktree path to the clipboard.
 2. Symlinks any configured `GEET_SYMLINK_PATHS` from the main worktree.
-3. Runs the [init scripts](#init-scripts) (unless `--no-init`).
-4. Opens a shell inside the new worktree — or, when running inside [herdr](https://herdr.dev) with `GEET_HERDR` enabled, opens it as a herdr workspace (see [herdr integration](#herdr-integration)).
+3. Opens a shell inside the new worktree — or, when running inside [herdr](https://herdr.dev) with `GEET_HERDR` enabled, opens it as a herdr workspace (see [herdr integration](#herdr-integration)).
+4. Runs the [init scripts](#init-scripts) (unless `--no-init`) — in the new herdr workspace's terminal if one was opened, otherwise in your current terminal just before the shell starts.
 
 ---
 
@@ -148,7 +148,7 @@ geet wt add
 
 ### `geet worktree list`
 
-Select a worktree (with fuzzy search). Its path is copied to the clipboard and a new shell is opened inside it.
+Select a worktree (with fuzzy search). Its path is copied to the clipboard and a new shell is opened inside it — or, with [herdr integration](#herdr-integration) enabled, its herdr workspace is opened or switched to. Worktrees that already have an open herdr workspace are marked `herdr ●`.
 
 ```sh
 geet wt list
@@ -160,6 +160,8 @@ geet wt            # same thing
 ### `geet worktree remove`
 
 Interactively select one or more worktrees (other than the main one) to remove; none are selected by default. Worktrees with uncommitted or untracked files are listed and you can reset them (`git reset --hard` + `git clean -fd`) before removing, or skip them. With herdr enabled, it also asks whether to close open workspaces for the removed worktrees. Failures on individual worktrees are reported without stopping the rest.
+
+If you remove the worktree you're currently in, it is removed last and geet moves you somewhere valid afterwards — see [removing the current worktree](#removing-the-current-worktree).
 
 ```sh
 geet wt remove
@@ -335,11 +337,22 @@ When `GEET_HERDR` is `prompt` or `auto` **and** geet is running inside a herdr p
 - `prompt` asks each time ("Open in new herdr workspace" / "Switch to herdr workspace" / "Open shell here"); `auto` always opens the workspace.
 - If a workspace for the worktree is already open, geet switches to it rather than creating a duplicate. `worktree list` marks such worktrees with `herdr ●`.
 - `worktree remove` / `prune` ask whether to also close the removed worktrees' herdr workspaces (never the one geet is running in).
+- Init scripts run inside the newly opened workspace (in its first pane) rather than in the terminal you ran geet from. Their output and any failure show up there.
 - Outside herdr, with `GEET_HERDR=off`, or if the `herdr` command fails, geet falls back to the normal shell. Use `GEET_HERDR=off geet wt …` for a one-off override.
+
+#### Removing the current worktree
+
+When `worktree remove` / `prune` removes the worktree geet is running in, it steps into the base (main) worktree first, removes the current one last, then:
+
+- **In herdr, base worktree workspace open:** switches to it and closes the current workspace.
+- **In herdr, base workspace not open, other workspaces exist:** switches to the first other workspace and closes the current one.
+- **In herdr with no other workspaces, or not in herdr:** opens a shell in the base worktree folder.
+
+If removing the current worktree fails, you stay where you are.
 
 ### Init scripts
 
-After `worktree new` / `worktree add`, geet runs these in the new worktree directory (each only if it exists and is executable):
+After `worktree new` / `worktree add`, geet runs these in the new worktree directory (each only if it exists and is executable). With herdr, they run in the new workspace's terminal; otherwise in your current terminal before the shell opens:
 
 1. `~/.geet/init/default.sh` — for every repo
 2. `~/.geet/init/<repo-name>.sh` — for the repo only
@@ -371,19 +384,29 @@ After setup, pressing Tab after `geet ` will complete subcommands and aliases.
 
 ```
 src/
-├── index.ts              # CLI entry point (commander + omelette)
+├── index.ts              # CLI entry point (commander + omelette completions)
 ├── config.ts             # Config loader (~/.geet/config → .env → .env.local → process.env)
-├── errors.ts             # GeetError + error helpers
-├── gitUtils.ts           # All git operations via execa
-├── herdrUtils.ts         # herdr CLI calls via execa
-├── prompts.ts            # @clack/prompts helpers
+├── utils/
+│   ├── errors.ts         # GeetError + error helpers
+│   ├── git.ts            # All git operations via execa
+│   ├── clipboard.ts      # copyToClipboard
+│   ├── commander.ts      # Subcommand help/description helpers
+│   └── stashChanges.ts   # Shared "stash current changes" flow
+├── prompts/              # @clack/prompts UI layer, one file per domain
+│   ├── common.ts
+│   └── checkout.ts, stash.ts, worktree.ts, config.ts
 └── commands/
     ├── checkout.ts
     ├── stash.ts
-    ├── worktree.ts
     ├── copy.ts
-    ├── config.ts
-    └── mergeRelease.ts
+    ├── mergeRelease.ts
+    ├── worktree/         # index, create, list, remove, rename, linkFix, pullMerge
+    │   └── utils/        # herdr (herdr CLI calls), openWorktree, initScripts, shell,
+    │                     # symlinks, naming, loadWorktrees
+    └── config/           # index, list, edit, projectMap, initScript
+        └── utils/        # editor, stubs
+
+test/                     # vitest unit tests (mirrors src/)
 ```
 
 ---
