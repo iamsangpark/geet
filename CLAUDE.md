@@ -21,7 +21,7 @@ npm run format        # oxfmt (write); `format:check` to verify
 npm test              # vitest run (tests live in test/)
 ```
 
-CI runs typecheck, lint, format:check, tests, and build on every PR.
+CI runs typecheck, lint, format:check, tests, and build on every PR. A husky pre-commit hook (`.husky/pre-commit`, installed by `prepare`) runs `lint-staged` (oxlint + oxfmt write on staged `*.ts`, re-staging the formatted files) and then a full typecheck.
 
 ## Architecture
 

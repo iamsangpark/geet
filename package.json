@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "dev": "node src/index.ts",
     "build": "tsc -p tsconfig.build.json",
-    "prepare": "npm run build",
+    "prepare": "husky && npm run build",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "format": "oxfmt",
@@ -28,6 +28,8 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0",
     "typescript": "^7.0.2",
@@ -35,5 +37,11 @@
   },
   "engines": {
     "node": ">=24.0.0"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "oxlint",
+      "oxfmt"
+    ]
   }
 }
