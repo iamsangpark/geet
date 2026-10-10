@@ -1,5 +1,5 @@
 /**
- * herdrUtils.ts
+ * commands/worktree/utils/herdr.ts
  * All herdr subprocess operations via execa.
  * Every exported function returns structured data or throws an Error
  * with a `.gitMessage` property containing a clean, user-facing message.

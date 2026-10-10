@@ -6,10 +6,25 @@ import { execa } from 'execa';
 import {
   addWorktree,
   branchExists,
+  checkoutBranch,
+  checkoutForce,
+  checkoutNewBranch,
+  checkoutNewBranchInDir,
+  deleteBranch,
+  getCurrentBranch,
+  getMainWorktree,
+  getRepoName,
+  getUncommittedChanges,
+  getWorktreeChanges,
+  listLocalBranches,
   listStashes,
   listWorktrees,
   mergeBranch,
+  moveWorktree,
   parseGitError,
+  pullBranch,
+  remoteTrackingExists,
+  resetWorktree,
   stashSave,
 } from '../../src/utils/git.ts';
 
@@ -25,6 +40,15 @@ function mockGit(...results: Array<string | { exitCode: number }>) {
 function gitArgs(call: number): string[] {
   return execaMock.mock.calls[call]![1] as string[];
 }
+
+function gitOptions(call: number): { cwd?: string } {
+  return execaMock.mock.calls[call]![2] as { cwd?: string };
+}
+
+const PORCELAIN = [
+  'worktree /code/my-repo\nHEAD aaa111\nbranch refs/heads/main',
+  'worktree /wt/my-repo/feat\nHEAD bbb222\nbranch refs/heads/feat',
+].join('\n\n');
 
 beforeEach(() => {
   execaMock.mockReset();
@@ -144,5 +168,129 @@ describe('mergeBranch', () => {
     expect(gitArgs(0)).toEqual(['merge', 'feat']);
     expect(gitArgs(1)).toEqual(['merge', '-X', 'ours', '--no-commit', 'feat']);
     expect(gitArgs(2)).toEqual(['merge', '--no-commit', 'feat']);
+  });
+});
+
+describe('status & branch', () => {
+  it('getUncommittedChanges reads porcelain status', async () => {
+    mockGit(' M a.ts');
+    expect(await getUncommittedChanges()).toBe(' M a.ts');
+    expect(gitArgs(0)).toEqual(['status', '--porcelain']);
+  });
+
+  it('getCurrentBranch reads the abbreviated HEAD', async () => {
+    mockGit('feat');
+    expect(await getCurrentBranch()).toBe('feat');
+    expect(gitArgs(0)).toEqual(['rev-parse', '--abbrev-ref', 'HEAD']);
+  });
+});
+
+describe('checkout', () => {
+  it.each([
+    [checkoutBranch, ['checkout', 'feat']],
+    [checkoutNewBranch, ['checkout', '-b', 'feat']],
+    [checkoutForce, ['checkout', '--force', 'feat']],
+  ])('builds the expected args', async (fn, expected) => {
+    mockGit('');
+    await fn('feat');
+    expect(gitArgs(0)).toEqual(expected);
+  });
+
+  it('checkoutNewBranchInDir runs inside the given directory', async () => {
+    mockGit('');
+    await checkoutNewBranchInDir('feat', '/wt/feat');
+    expect(gitArgs(0)).toEqual(['checkout', '-b', 'feat']);
+    expect(gitOptions(0).cwd).toBe('/wt/feat');
+  });
+});
+
+describe('remoteTrackingExists', () => {
+  it.each([
+    [0, true],
+    [1, false],
+  ])('exit code %i → %s, checking origin/<branch>', async (exitCode, expected) => {
+    mockGit({ exitCode });
+    expect(await remoteTrackingExists('feat')).toBe(expected);
+    expect(gitArgs(0)).toEqual(['show-ref', '--verify', '--quiet', 'refs/remotes/origin/feat']);
+  });
+});
+
+describe('worktree changes', () => {
+  it('getWorktreeChanges lists individual files inside the worktree, dropping blanks', async () => {
+    mockGit(' M a.ts\n?? dir/new.ts\n\n');
+    expect(await getWorktreeChanges('/wt/feat')).toEqual([' M a.ts', '?? dir/new.ts']);
+    expect(gitArgs(0)).toEqual(['status', '--porcelain', '--untracked-files=all']);
+    expect(gitOptions(0).cwd).toBe('/wt/feat');
+  });
+
+  it('getWorktreeChanges returns [] for a clean worktree', async () => {
+    mockGit('');
+    expect(await getWorktreeChanges('/wt/feat')).toEqual([]);
+  });
+
+  it('resetWorktree hard-resets then cleans, both inside the worktree', async () => {
+    mockGit('', '');
+    await resetWorktree('/wt/feat');
+    expect(gitArgs(0)).toEqual(['reset', '--hard']);
+    expect(gitArgs(1)).toEqual(['clean', '-fd']);
+    expect(gitOptions(0).cwd).toBe('/wt/feat');
+    expect(gitOptions(1).cwd).toBe('/wt/feat');
+  });
+});
+
+describe('worktree & branch management', () => {
+  it('moveWorktree passes old and new paths', async () => {
+    mockGit('');
+    await moveWorktree('/wt/old', '/wt/new');
+    expect(gitArgs(0)).toEqual(['worktree', 'move', '/wt/old', '/wt/new']);
+  });
+
+  it('deleteBranch uses -d, or -D when forced', async () => {
+    mockGit('', '');
+    await deleteBranch('old');
+    await deleteBranch('old', true);
+    expect(gitArgs(0)).toEqual(['branch', '-d', 'old']);
+    expect(gitArgs(1)).toEqual(['branch', '-D', 'old']);
+  });
+
+  it('listLocalBranches excludes branches checked out in a worktree', async () => {
+    mockGit('main\nfeat\n  spare  \n\nother\n', PORCELAIN);
+    expect(await listLocalBranches()).toEqual(['spare', 'other']);
+    expect(gitArgs(0)).toEqual(['branch', '--format=%(refname:short)']);
+  });
+});
+
+describe('main worktree & repo name', () => {
+  it('getMainWorktree returns the first worktree', async () => {
+    mockGit(PORCELAIN);
+    expect(await getMainWorktree()).toMatchObject({ path: '/code/my-repo', isMain: true });
+  });
+
+  it('getRepoName is the main worktree folder name, not the current one', async () => {
+    mockGit(PORCELAIN);
+    expect(await getRepoName()).toBe('my-repo');
+  });
+
+  it('getRepoName throws when git lists no worktrees', async () => {
+    mockGit('');
+    await expect(getRepoName()).rejects.toMatchObject({
+      gitMessage: 'Could not find main worktree.',
+    });
+  });
+});
+
+describe('pullBranch', () => {
+  it('fast-forwards another branch via fetch origin <b>:<b> without switching', async () => {
+    mockGit('', 'main', '');
+    await pullBranch('feat');
+    expect(gitArgs(0)).toEqual(['fetch', '--all']);
+    expect(gitArgs(1)).toEqual(['rev-parse', '--abbrev-ref', 'HEAD']);
+    expect(gitArgs(2)).toEqual(['fetch', 'origin', 'feat:feat']);
+  });
+
+  it('merges origin/<branch> when it is the current branch', async () => {
+    mockGit('', 'feat', '');
+    await pullBranch('feat');
+    expect(gitArgs(2)).toEqual(['merge', 'origin/feat']);
   });
 });

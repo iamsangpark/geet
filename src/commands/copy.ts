@@ -16,6 +16,11 @@ import { intro, outro } from '../prompts/common.ts';
 
 const JIRA_KEY = /[A-Z][A-Z0-9]*-\d+/;
 
+/** First Jira ticket key (e.g. PROJ-1234) found in `text`. */
+export function findJiraKey(text: string): string | undefined {
+  return text.match(JIRA_KEY)?.[0];
+}
+
 function fail(message: string): GeetError {
   return new GeetError(message);
 }
@@ -57,11 +62,11 @@ export async function copyJiraAction() {
   intro('geet copy jira');
 
   const branch = await getCurrentBranch();
-  let key = branch.match(JIRA_KEY)?.[0];
+  let key = findJiraKey(branch);
 
   if (!key) {
     const current = await currentWorktree();
-    key = path.basename(current.path).match(JIRA_KEY)?.[0];
+    key = findJiraKey(path.basename(current.path));
   }
 
   if (!key) throw fail('No Jira ticket found in the current branch or worktree folder name.');

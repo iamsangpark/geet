@@ -52,7 +52,8 @@ export const spinner = () => p.spinner();
 
 // ── Fuzzy Search Helper ───────────────────────────────────────────────────────
 
-function fuzzyMatch(input: string | undefined, target: string): boolean {
+/** True when the characters of `input` appear in `target` in order (case-insensitive). */
+export function fuzzyMatch(input: string | undefined, target: string): boolean {
   if (!input) return true;
   const q = input.toLowerCase();
   const t = target.toLowerCase();

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -101,5 +101,39 @@ describe('env-derived constants', () => {
   it('expands ~ in WORKTREE_BASE', async () => {
     const cfg = await loadConfig({ GEET_WORKTREE_BASE: '~/dev/worktrees' });
     expect(cfg.WORKTREE_BASE).toBe(path.join(os.homedir(), 'dev/worktrees'));
+  });
+});
+
+describe('project map', () => {
+  // GLOBAL_PROJECT_MAP_PATH is derived from the home dir at import time.
+  async function loadConfig() {
+    vi.resetModules();
+    vi.stubEnv('HOME', dir);
+    return import('../src/config.ts');
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('reads {} when the map file does not exist', async () => {
+    expect(await (await loadConfig()).readProjectMap()).toEqual({});
+  });
+
+  it('round-trips through writeProjectMap, creating ~/.geet', async () => {
+    const cfg = await loadConfig();
+    await cfg.writeProjectMap({ 'my-repo': 'my-project' });
+    expect(cfg.GLOBAL_PROJECT_MAP_PATH).toBe(path.join(dir, '.geet', 'project-map.json'));
+    expect(await readFile(cfg.GLOBAL_PROJECT_MAP_PATH, 'utf8')).toBe(
+      '{\n  "my-repo": "my-project"\n}\n',
+    );
+    expect(await cfg.readProjectMap()).toEqual({ 'my-repo': 'my-project' });
+  });
+
+  it('throws on malformed JSON rather than silently returning {}', async () => {
+    const cfg = await loadConfig();
+    await mkdir(path.dirname(cfg.GLOBAL_PROJECT_MAP_PATH), { recursive: true });
+    await writeFile(cfg.GLOBAL_PROJECT_MAP_PATH, '{ not json');
+    await expect(cfg.readProjectMap()).rejects.toThrow();
   });
 });

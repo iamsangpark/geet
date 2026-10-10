@@ -132,15 +132,15 @@ export async function checkoutForce(branch: string) {
 // ── Stash ─────────────────────────────────────────────────────────────────────
 
 /**
- * Stashes current changes. If `message` is provided, uses it as the stash description.
- */
-/**
  * Stages all changes including untracked files (`git add -A`).
  */
 export async function gitAddAll() {
   return git(['add', '-A']);
 }
 
+/**
+ * Stashes current changes. If `message` is provided, uses it as the stash description.
+ */
 export async function stashSave(message?: string) {
   if (message) {
     return git(['stash', 'push', '-m', message]);
