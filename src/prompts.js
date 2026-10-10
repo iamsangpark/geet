@@ -193,15 +193,6 @@ export async function promptSelectWorktree(worktrees) {
 }
 
 /**
- * Displays non-main worktrees and lets the user select one to remove.
- * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
- * @returns {{ path: string, branch: string, commit: string, isMain: boolean }}
- */
-export async function promptSelectWorktreeForRemove(worktrees) {
-  return searchSelect('Select a worktree to remove:', worktrees.map(toWorktreeOption));
-}
-
-/**
  * Shown before `worktree remove` / `prune` when a worktree has changes that block removal.
  * @param {string} branch
  * @returns {Promise<'reset' | 'skip'>}
@@ -236,15 +227,17 @@ export async function promptSelectWorktreeForLinkFix(worktrees) {
 }
 
 /**
- * Multiselect: all stale worktrees pre-selected; user can deselect any to keep.
+ * Multiselect of worktrees. `preselected` controls whether everything starts checked.
+ * @param {string} message
  * @param {Array<{ path: string, branch: string, commit: string, isMain: boolean }>} worktrees
- * @returns {Array<{ path: string, branch: string, commit: string, isMain: boolean }>}
+ * @param {{ preselected?: boolean }} [opts]
+ * @returns {Promise<Array<{ path: string, branch: string, commit: string, isMain: boolean }>>}
  */
-export async function promptMultiSelectWorktreesForPrune(worktrees) {
+export async function promptMultiSelectWorktrees(message, worktrees, { preselected = false } = {}) {
   const selected = await p.multiselect({
-    message: 'Select worktrees to prune (space to toggle, enter to confirm):',
+    message: `${message} (space to toggle, enter to confirm):`,
     options: worktrees.map(toWorktreeOption),
-    initialValues: worktrees,
+    initialValues: preselected ? worktrees : [],
   });
   return guardCancel(selected);
 }

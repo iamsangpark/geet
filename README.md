@@ -159,7 +159,7 @@ geet wt            # same thing
 
 ### `geet worktree remove`
 
-Interactively select a worktree (other than the main one) to remove. If the worktree has uncommitted or untracked files, geet lists them and offers to reset (`git reset --hard` + `git clean -fd`) before removing, or to skip. With herdr enabled, it also asks whether to close the worktree's open workspace.
+Interactively select one or more worktrees (other than the main one) to remove; none are selected by default. Worktrees with uncommitted or untracked files are listed and you can reset them (`git reset --hard` + `git clean -fd`) before removing, or skip them. With herdr enabled, it also asks whether to close open workspaces for the removed worktrees. Failures on individual worktrees are reported without stopping the rest.
 
 ```sh
 geet wt remove
