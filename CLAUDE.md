@@ -2,7 +2,7 @@
 
 ## Overview
 
-`geet` is a personal interactive Git wrapper CLI (TypeScript, Node.js ESM, `"type": "module"`). Install with `npm link` to make `geet` available globally. Requires Node.js 24+.
+`geet` is a personal interactive Git wrapper CLI (TypeScript, Node.js ESM, `"type": "module"`). Install with `npm link` to make `geet` available globally. Requires Node.js 22.14+.
 
 The source is TypeScript in `src/`, compiled by `tsc` to `dist/` (gitignored); `bin` points at `dist/index.js`. Source files import siblings with the `.ts` extension — `rewriteRelativeImportExtensions` rewrites them to `.js` on emit — and type-only imports must use `import type` (`verbatimModuleSyntax`). `npm install` runs `prepare`, which builds, so `npm link` works on a fresh clone; rebuild with `npm run build` after editing source.
 

@@ -4,7 +4,7 @@ A personal, interactive Git wrapper with safety guards, worktree management, and
 
 ## Requirements
 
-- Node.js 24+
+- Node.js 22.14+
 
 ## Installation
 

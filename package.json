@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "start": "node dist/index.js",
-    "dev": "node src/index.ts",
+    "dev": "node --experimental-strip-types src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "prepare": "husky && npm run build",
     "typecheck": "tsc --noEmit",
@@ -27,9 +27,9 @@
     "omelette": "^0.4.17"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
+    "@types/node": "^22.14.0",
     "husky": "^9.1.7",
-    "lint-staged": "^17.6.0",
+    "lint-staged": "^16.4.0",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0",
     "typescript": "^7.0.2",
@@ -42,6 +42,6 @@
     ]
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.14.0"
   }
 }
