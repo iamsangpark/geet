@@ -110,7 +110,7 @@ export async function promptInitScriptSource(): Promise<string> {
     message: 'Path to an existing script to copy/move (leave empty to generate a stub):',
     placeholder: '~/scripts/my-init.sh',
   });
-  return guardCancel<string | undefined>(src) ?? '';
+  return guardCancel(src) ?? '';
 }
 
 /**

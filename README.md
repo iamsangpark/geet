@@ -4,7 +4,8 @@ A personal, interactive Git wrapper with safety guards, worktree management, and
 
 ## Requirements
 
-- Node.js 24+
+- Node.js 22.14+
+- [herdr](https://herdr.dev) 0.9.3 (optional — only needed for the [herdr integration](#herdr-integration))
 
 ## Installation
 
@@ -343,6 +344,8 @@ Use `geet config global|local|set` to edit these interactively.
 
 ### herdr integration
 
+geet is developed and tested against **herdr v0.9.3**. Other versions may work, but the integration depends on the `herdr` CLI's command and JSON output format, so a different version can break it (geet then falls back to a plain shell).
+
 When `GEET_HERDR` is `prompt` or `auto` **and** geet is running inside a herdr pane (herdr sets `HERDR_ENV=1`), the end of `worktree new` / `add` / `list` opens the worktree as a herdr workspace instead of spawning a nested shell:
 
 - `prompt` asks each time ("Open in new herdr workspace" / "Switch to herdr workspace" / "Open shell here"); `auto` always opens the workspace.
@@ -429,7 +432,8 @@ Source is TypeScript in `src/`, compiled by `tsc` to `dist/` (which `geet` runs)
 ```sh
 npm install          # also builds, via the `prepare` script
 npm run build        # compile src/ → dist/ (re-run after editing source)
-npm run dev          # run src/index.ts directly, no build
+npm run dev          # build, then run dist/index.js
+npm run build:watch  # tsc --watch
 npm run typecheck    # tsc --noEmit (src + test)
 npm run lint         # oxlint
 npm run format       # oxfmt (use `format:check` to verify only)

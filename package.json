@@ -8,7 +8,8 @@
   "type": "module",
   "scripts": {
     "start": "node dist/index.js",
-    "dev": "node src/index.ts",
+    "dev": "npm run build && node dist/index.js",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
     "build": "tsc -p tsconfig.build.json",
     "prepare": "husky && npm run build",
     "typecheck": "tsc --noEmit",
@@ -18,18 +19,18 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@clack/prompts": "^0.9.1",
-    "@inquirer/search": "^4.2.1",
-    "clipboardy": "^5.0.0",
-    "commander": "^12.0.0",
-    "dotenv": "^17.4.2",
-    "execa": "^9.0.0",
+    "@clack/prompts": "^1.8.1",
+    "@inquirer/search": "^4.3.4",
+    "clipboardy": "^5.3.2",
+    "commander": "^15.0.0",
+    "dotenv": "^18.0.7",
+    "execa": "^10.1.0",
     "omelette": "^0.4.17"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
+    "@types/node": "^22.14.0",
     "husky": "^9.1.7",
-    "lint-staged": "^17.6.0",
+    "lint-staged": "^16.4.0",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0",
     "typescript": "^7.0.2",
@@ -42,6 +43,6 @@
     ]
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.14.0"
   }
 }

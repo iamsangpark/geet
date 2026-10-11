@@ -2,7 +2,7 @@
 
 ## Overview
 
-`geet` is a personal interactive Git wrapper CLI (TypeScript, Node.js ESM, `"type": "module"`). Install with `npm link` to make `geet` available globally. Requires Node.js 24+.
+`geet` is a personal interactive Git wrapper CLI (TypeScript, Node.js ESM, `"type": "module"`). Install with `npm link` to make `geet` available globally. Requires Node.js 22.14+.
 
 The source is TypeScript in `src/`, compiled by `tsc` to `dist/` (gitignored); `bin` points at `dist/index.js`. Source files import siblings with the `.ts` extension — `rewriteRelativeImportExtensions` rewrites them to `.js` on emit — and type-only imports must use `import type` (`verbatimModuleSyntax`). `npm install` runs `prepare`, which builds, so `npm link` works on a fresh clone; rebuild with `npm run build` after editing source.
 
@@ -11,7 +11,8 @@ The source is TypeScript in `src/`, compiled by `tsc` to `dist/` (gitignored); `
 ```sh
 npm run build         # tsc -> dist/ (also runs on npm install via `prepare`)
 npm start             # node dist/index.js (needs a build)
-npm run dev           # node src/index.ts — runs source directly via Node type stripping, no build
+npm run dev           # build, then run dist/index.js
+npm run build:watch   # tsc --watch (rebuild on change; pairs with npm link)
 npm link              # global install
 geet <command>        # after npm link
 
@@ -74,6 +75,6 @@ test/                 # vitest unit tests (mirrors `src/`)
 
 `GEET_WORKTREE_LIST_SIZE` (default `10`, `0` = show all) sets how many rows searchable selection lists show; ESC cancels them.
 
-`GEET_HERDR` (`off` default | `prompt` | `auto`, exported as `HERDR_MODE`) enables herdr integration. It only applies when `HERDR_ENV=1` (inside a herdr pane); `worktree new/add/list` then open the worktree via `herdr worktree open` instead of spawning a shell, and `remove`/`prune` offer to close the matching herdr workspaces (never the one geet runs in). All herdr CLI calls live in `src/commands/worktree/utils/herdr.ts` (the only file that shells out to herdr); on any herdr failure geet falls back to `spawnShellIn`.
+`GEET_HERDR` (`off` default | `prompt` | `auto`, exported as `HERDR_MODE`) enables herdr integration. It only applies when `HERDR_ENV=1` (inside a herdr pane); `worktree new/add/list` then open the worktree via `herdr worktree open` instead of spawning a shell, and `remove`/`prune` offer to close the matching herdr workspaces (never the one geet runs in). All herdr CLI calls live in `src/commands/worktree/utils/herdr.ts` (the only file that shells out to herdr); on any herdr failure geet falls back to `spawnShellIn`. The herdr integration targets **herdr v0.9.3** — the commands and JSON response shapes in `herdr.ts` were written against that version, so re-verify them when bumping it (and update the version in `README.md`).
 
 After `worktree new` / `worktree add` (unless `--no-init` is passed), the tool runs init scripts in order: `~/.geet/init/default.sh` (always, if executable), then `~/.geet/init/<repo-name>.sh` (repo-specific, if executable). Both are run in the new worktree directory. Use `geet config init-script --default` (or `-d`) to scaffold `default.sh` and `geet config init-script` to scaffold the repo-specific one.
