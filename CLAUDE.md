@@ -11,7 +11,8 @@ The source is TypeScript in `src/`, compiled by `tsc` to `dist/` (gitignored); `
 ```sh
 npm run build         # tsc -> dist/ (also runs on npm install via `prepare`)
 npm start             # node dist/index.js (needs a build)
-npm run dev           # node src/index.ts — runs source directly via Node type stripping, no build
+npm run dev           # build, then run dist/index.js
+npm run build:watch   # tsc --watch (rebuild on change; pairs with npm link)
 npm link              # global install
 geet <command>        # after npm link
 

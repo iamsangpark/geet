@@ -8,7 +8,8 @@
   "type": "module",
   "scripts": {
     "start": "node dist/index.js",
-    "dev": "node --experimental-strip-types src/index.ts",
+    "dev": "npm run build && node dist/index.js",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
     "build": "tsc -p tsconfig.build.json",
     "prepare": "husky && npm run build",
     "typecheck": "tsc --noEmit",

@@ -429,7 +429,8 @@ Source is TypeScript in `src/`, compiled by `tsc` to `dist/` (which `geet` runs)
 ```sh
 npm install          # also builds, via the `prepare` script
 npm run build        # compile src/ → dist/ (re-run after editing source)
-npm run dev          # run src/index.ts directly, no build
+npm run dev          # build, then run dist/index.js
+npm run build:watch  # tsc --watch
 npm run typecheck    # tsc --noEmit (src + test)
 npm run lint         # oxlint
 npm run format       # oxfmt (use `format:check` to verify only)
