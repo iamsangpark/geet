@@ -5,6 +5,7 @@ A personal, interactive Git wrapper with safety guards, worktree management, and
 ## Requirements
 
 - Node.js 22.14+
+- [herdr](https://herdr.dev) 0.9.3 (optional — only needed for the [herdr integration](#herdr-integration))
 
 ## Installation
 
@@ -342,6 +343,8 @@ GEET_WORKTREE_LIST_SIZE=10
 Use `geet config global|local|set` to edit these interactively.
 
 ### herdr integration
+
+geet is developed and tested against **herdr v0.9.3**. Other versions may work, but the integration depends on the `herdr` CLI's command and JSON output format, so a different version can break it (geet then falls back to a plain shell).
 
 When `GEET_HERDR` is `prompt` or `auto` **and** geet is running inside a herdr pane (herdr sets `HERDR_ENV=1`), the end of `worktree new` / `add` / `list` opens the worktree as a herdr workspace instead of spawning a nested shell:
 
