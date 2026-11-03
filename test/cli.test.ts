@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 
 const run = promisify(execFile);
 
-/** Runs the real CLI entry point (via Node type stripping) with the given args. */
+/** Runs the real CLI entry point (compiled dist/, built by test/globalSetup.ts) with the given args. */
 async function geet(...args: string[]) {
-  const { stdout } = await run('node', ['src/index.ts', ...args], { env: { ...process.env } });
+  const { stdout } = await run('node', ['dist/index.js', ...args], { env: { ...process.env } });
   return stdout.trim();
 }
 

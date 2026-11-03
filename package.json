@@ -23,7 +23,7 @@
     "clipboardy": "^5.0.0",
     "commander": "^12.0.0",
     "dotenv": "^17.4.2",
-    "execa": "^9.0.0",
+    "execa": "9.6.1",
     "omelette": "^0.4.17"
   },
   "devDependencies": {
@@ -42,6 +42,6 @@
     ]
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=20.17.0"
   }
 }
