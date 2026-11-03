@@ -34,6 +34,7 @@ import {
   closeHerdrWorkspace,
   focusHerdrWorkspace,
   herdrMode,
+  isHerdrWorkspaceFocused,
   listHerdrWorkspaces,
 } from './utils/herdr.ts';
 import { spawnShellIn } from './utils/shell.ts';
@@ -45,29 +46,18 @@ import { openHerdrWorkspaces } from './utils/openWorktree.ts';
 interface RemoveOptions {
   path?: string;
   branch?: string;
-  this?: boolean;
 }
 
 export async function worktreeRemoveAction(options: RemoveOptions = {}) {
   intro('geet wt remove');
 
-  if (options.this && (options.path || options.branch)) {
-    throw new GeetError('--this cannot be combined with --path or --branch.');
-  }
-
   const loaded = await loadWorktrees({
-    // --this needs the main worktree listed too, to tell "in main" from "in no worktree"
-    filter: options.this ? undefined : (w) => !w.isMain,
+    filter: (w) => !w.isMain,
     emptyMessage: 'No worktrees to remove.',
   });
   if (!loaded) return;
 
   const mainPath = loaded.all.find((w) => w.isMain)?.path;
-  if (options.this) {
-    const target = await findCurrentWorktree(loaded.all);
-    await removeWorktrees('remove', loaded.candidates, mainPath, [target]);
-    return;
-  }
   if (options.path || options.branch) {
     const target = await findWorktree(loaded.all, options);
     await removeWorktrees('remove', loaded.candidates, mainPath, [target]);
@@ -75,6 +65,21 @@ export async function worktreeRemoveAction(options: RemoveOptions = {}) {
   }
 
   await removeWorktrees('remove', loaded.candidates, mainPath);
+}
+
+// ── worktree close ────────────────────────────────────────────────────────────
+
+/** Removes the worktree containing the current directory, then moves you out of it. */
+export async function worktreeCloseAction() {
+  intro('geet wt close');
+
+  // The main worktree must be listed too, to tell "in main" from "in no worktree"
+  const loaded = await loadWorktrees({ emptyMessage: 'No worktrees to close.' });
+  if (!loaded) return;
+
+  const mainPath = loaded.all.find((w) => w.isMain)?.path;
+  const target = await findCurrentWorktree(loaded.all);
+  await removeWorktrees('close', loaded.candidates, mainPath, [target]);
 }
 
 /**
@@ -163,6 +168,7 @@ interface RemovalPlan {
 
 const REMOVAL_COMMANDS = {
   remove: { prompt: 'Select worktrees to remove', done: 'Removed', preselected: false },
+  close: { prompt: '', done: 'Removed', preselected: false },
   prune: { prompt: 'Select worktrees to prune', done: 'Pruned', preselected: true },
 };
 
@@ -235,8 +241,10 @@ async function findCurrentPlan(plans: RemovalPlan[]): Promise<RemovalPlan | unde
 
 /**
  * After removing the worktree we were running in, get the user somewhere real:
- *   - in herdr: focus the base worktree's workspace if open, else the first other
- *     workspace, then close the now-dead one (this ends geet, so it comes last)
+ *   - in herdr: if the user is still looking at this workspace, focus the base
+ *     worktree's workspace (else the first other workspace); if they have already
+ *     moved to another workspace, leave them there. Then close the now-dead
+ *     workspace (this ends geet, so it comes last)
  *   - otherwise (not in herdr, no other workspace, or herdr failed): a shell in
  *     the base worktree folder
  */
@@ -244,6 +252,10 @@ async function leaveRemovedWorktree(mainWorktreePath: string, openWorkspaces: Ma
   const currentId = process.env.HERDR_WORKSPACE_ID;
   if (herdrMode() !== 'off' && currentId) {
     try {
+      if (!(await isHerdrWorkspaceFocused(currentId))) {
+        await closeHerdrWorkspace(currentId);
+        return;
+      }
       const baseId = openWorkspaces.get(path.resolve(mainWorktreePath));
       const targetId =
         baseId && baseId !== currentId

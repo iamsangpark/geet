@@ -92,7 +92,7 @@ geet sts list
 
 Manage git worktrees. Running `geet worktree` with no subcommand is the same as `geet worktree list`.
 
-Subcommands: `new`, `add`, `list`, `remove`, `prune`, `rename`, `link-fix`, `pull`, `merge`
+Subcommands: `new`, `add`, `list`, `remove`, `close`, `prune`, `rename`, `link-fix`, `pull`, `merge`
 
 After a worktree is created (`new` / `add`), geet:
 
@@ -166,9 +166,8 @@ Interactively select one or more worktrees (other than the main one) to remove; 
 | ----------------------- | ----------------------------------------------------------------------- |
 | `--path <dir>`          | Remove the worktree at this path (skips the selection prompt).          |
 | `-b, --branch <branch>` | Remove the worktree with this branch name (skips the selection prompt). |
-| `--this`                | Remove the worktree you're currently in (skips the selection prompt).   |
 
-With `--path` and/or `--branch` the matching worktree is removed directly; if both are given they must match the same worktree. It errors if nothing matches or the match is the main worktree. `--this` removes the worktree containing the current directory and cannot be combined with the other two; it errors outside a worktree or inside the main one. The reset-or-skip and herdr-workspace prompts still apply.
+With `--path` and/or `--branch` the matching worktree is removed directly; if both are given they must match the same worktree. It errors if nothing matches or the match is the main worktree. The reset-or-skip and herdr-workspace prompts still apply.
 
 If you remove the worktree you're currently in, it is removed last and geet moves you somewhere valid afterwards — see [removing the current worktree](#removing-the-current-worktree).
 
@@ -176,7 +175,16 @@ If you remove the worktree you're currently in, it is removed last and geet move
 geet wt remove
 geet wt remove --path ~/worktrees/my-app/PROJ-1234-add_login_page
 geet wt remove --branch sp/PROJ-1234-add_login_page
-geet wt remove --this
+```
+
+---
+
+### `geet worktree close`
+
+Removes the worktree containing the current directory (no selection prompt), then moves you out of it — see [removing the current worktree](#removing-the-current-worktree). It errors outside a worktree or inside the main one. The reset-or-skip prompt still applies.
+
+```sh
+geet wt close
 ```
 
 ---
@@ -356,8 +364,9 @@ When `GEET_HERDR` is `prompt` or `auto` **and** geet is running inside a herdr p
 
 #### Removing the current worktree
 
-When `worktree remove` / `prune` removes the worktree geet is running in, it steps into the base (main) worktree first, removes the current one last, then:
+When `worktree remove` / `close` / `prune` removes the worktree geet is running in, it steps into the base (main) worktree first, removes the current one last, then:
 
+- **In herdr, you've since switched to another workspace:** closes the current workspace and leaves you where you are.
 - **In herdr, base worktree workspace open:** switches to it and closes the current workspace.
 - **In herdr, base workspace not open, other workspaces exist:** switches to the first other workspace and closes the current one.
 - **In herdr with no other workspaces, or not in herdr:** opens a shell in the base worktree folder.
