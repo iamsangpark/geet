@@ -28,11 +28,13 @@ vi.mock('../../../src/commands/worktree/utils/herdr.ts', () => ({
   closeHerdrWorkspace: vi.fn(),
   focusHerdrWorkspace: vi.fn(),
   listHerdrWorkspaces: vi.fn(),
+  isHerdrWorkspaceFocused: vi.fn(),
   herdrMode: vi.fn(),
 }));
 vi.mock('../../../src/commands/worktree/utils/shell.ts', () => ({ spawnShellIn: vi.fn() }));
 
 import {
+  worktreeCloseAction,
   worktreePruneAction,
   worktreeRemoveAction,
 } from '../../../src/commands/worktree/remove.ts';
@@ -40,6 +42,7 @@ import {
   closeHerdrWorkspace,
   focusHerdrWorkspace,
   herdrMode,
+  isHerdrWorkspaceFocused,
   listHerdrWorkspaces,
 } from '../../../src/commands/worktree/utils/herdr.ts';
 import { spawnShellIn } from '../../../src/commands/worktree/utils/shell.ts';
@@ -312,6 +315,7 @@ describe('removing the worktree geet is running in', () => {
       async (id) => void events.push(`focus workspace ${id}`),
     );
     vi.mocked(listHerdrWorkspaces).mockResolvedValue([]);
+    vi.mocked(isHerdrWorkspaceFocused).mockResolvedValue(true);
   });
 
   it('steps out, removes it last, then opens a shell in the base worktree outside herdr', async () => {
@@ -320,9 +324,9 @@ describe('removing the worktree geet is running in', () => {
     expect(spawnShellIn).toHaveBeenCalledWith('/repo');
   });
 
-  describe('--this', () => {
+  describe('worktree close', () => {
     it('removes the worktree containing the current directory, then leaves it', async () => {
-      await worktreeRemoveAction({ this: true });
+      await worktreeCloseAction();
       expect(promptMultiSelectWorktrees).not.toHaveBeenCalled();
       expect(events).toEqual(['chdir /repo', 'remove /wt/a']);
       expect(spawnShellIn).toHaveBeenCalledWith('/repo');
@@ -330,7 +334,7 @@ describe('removing the worktree geet is running in', () => {
 
     it('fails in the main worktree', async () => {
       vi.mocked(process.cwd).mockReturnValue('/repo/src');
-      await expect(worktreeRemoveAction({ this: true })).rejects.toThrow(
+      await expect(worktreeCloseAction()).rejects.toThrow(
         'Cannot remove the main worktree (/repo).',
       );
       expect(removeWorktree).not.toHaveBeenCalled();
@@ -338,14 +342,8 @@ describe('removing the worktree geet is running in', () => {
 
     it('fails outside any worktree', async () => {
       vi.mocked(process.cwd).mockReturnValue('/elsewhere');
-      await expect(worktreeRemoveAction({ this: true })).rejects.toThrow(
+      await expect(worktreeCloseAction()).rejects.toThrow(
         'The current directory is not inside a worktree.',
-      );
-    });
-
-    it('cannot be combined with --path or --branch', async () => {
-      await expect(worktreeRemoveAction({ this: true, branch: 'a' })).rejects.toThrow(
-        '--this cannot be combined',
       );
     });
   });
@@ -385,6 +383,20 @@ describe('removing the worktree geet is running in', () => {
         'focus workspace ws-main',
         'close workspace ws-a',
       ]);
+      expect(spawnShellIn).not.toHaveBeenCalled();
+    });
+
+    it('leaves the user where they are when they moved to another workspace', async () => {
+      vi.mocked(isHerdrWorkspaceFocused).mockResolvedValue(false);
+      vi.mocked(openHerdrWorkspaces).mockResolvedValue(
+        new Map([
+          ['/repo', 'ws-main'],
+          ['/wt/a', 'ws-a'],
+        ]),
+      );
+      await worktreeRemoveAction();
+      expect(focusHerdrWorkspace).not.toHaveBeenCalled();
+      expect(events.slice(-2)).toEqual(['remove /wt/a', 'close workspace ws-a']);
       expect(spawnShellIn).not.toHaveBeenCalled();
     });
 

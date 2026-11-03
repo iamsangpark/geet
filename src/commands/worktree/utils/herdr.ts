@@ -39,7 +39,7 @@ interface HerdrResult {
   worktrees?: HerdrWorktree[];
   workspace?: { workspace_id: string };
   panes?: { pane_id: string }[];
-  workspaces?: { workspace_id: string }[];
+  workspaces?: { workspace_id: string; focused?: boolean }[];
   already_open?: boolean;
 }
 
@@ -146,4 +146,10 @@ export async function listHerdrWorkspaces(): Promise<string[]> {
 /** Focuses (switches to) a herdr workspace. */
 export async function focusHerdrWorkspace(workspaceId: string): Promise<void> {
   await herdr(['workspace', 'focus', workspaceId]);
+}
+
+/** Whether a herdr workspace is the one the user currently has focused. */
+export async function isHerdrWorkspaceFocused(workspaceId: string): Promise<boolean> {
+  const result = await herdr(['workspace', 'list']);
+  return (result.workspaces ?? []).some((w) => w.workspace_id === workspaceId && w.focused);
 }
