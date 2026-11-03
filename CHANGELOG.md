@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/iamsangpark/geet/compare/v1.3.0...v1.4.0) (2026-11-03)
+
+
+### Features
+
+* add wt close, don't steal focus when workspace unfocused ([#19](https://github.com/iamsangpark/geet/issues/19)) ([91cbe32](https://github.com/iamsangpark/geet/commit/91cbe32a17aa6965bb1488ea6db04eddb7b003a0))
+* support Node 20 and pin execa to 9.6.1 ([#17](https://github.com/iamsangpark/geet/issues/17)) ([ea24e0d](https://github.com/iamsangpark/geet/commit/ea24e0d86e82993051e0542664aa9f434cde48a7))
+
 ## [1.3.0](https://github.com/iamsangpark/geet/compare/v1.2.0...v1.3.0) (2026-10-10)
 
 
