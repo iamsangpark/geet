@@ -4,7 +4,7 @@ A personal, interactive Git wrapper with safety guards, worktree management, and
 
 ## Requirements
 
-- Node.js 22.14+
+- Node.js 20.17+ (22.12+ to develop)
 - [herdr](https://herdr.dev) 0.9.3 (optional — only needed for the [herdr integration](#herdr-integration))
 
 ## Installation

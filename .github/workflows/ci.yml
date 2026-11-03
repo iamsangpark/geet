@@ -22,3 +22,8 @@ jobs:
       - run: npm run build
       - name: Smoke test
         run: node dist/index.js --help
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Smoke test on Node 20
+        run: node dist/index.js --help
