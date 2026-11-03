@@ -25,12 +25,12 @@ export interface SearchOption<T> {
  * Call immediately after any @clack/prompts prompt.
  * Exits cleanly if the user pressed ESC or Ctrl+C.
  */
-export function guardCancel<T>(value: T | symbol, message = 'Operation cancelled.'): T {
+export function guardCancel<T>(value: T, message = 'Operation cancelled.'): Exclude<T, symbol> {
   if (p.isCancel(value)) {
     p.cancel(message);
     process.exit(0);
   }
-  return value as T;
+  return value as Exclude<T, symbol>;
 }
 
 // ── Wrappers ──────────────────────────────────────────────────────────────────
