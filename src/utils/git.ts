@@ -249,6 +249,65 @@ export async function deleteBranch(branch: string, force = false) {
 }
 
 /**
+ * Returns true if a local branch with this name exists (no network access).
+ */
+export async function localBranchExists(branch: string): Promise<boolean> {
+  const result = await execa('git', ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], {
+    reject: false,
+  });
+  return result.exitCode === 0;
+}
+
+/**
+ * Returns every local branch name, including ones checked out in a worktree.
+ */
+export async function listAllLocalBranches(): Promise<string[]> {
+  const result = await git(['branch', '--format=%(refname:short)']);
+  return result
+    .split('\n')
+    .map((b) => b.trim())
+    .filter(Boolean);
+}
+
+// ── Branch base ───────────────────────────────────────────────────────────────
+// Git doesn't track which branch another was created from, so geet records it in the
+// repo's local config as `branch.<name>.geet-base` (shared by all worktrees, never pushed).
+
+const baseKey = (branch: string) => `branch.${branch}.geet-base`;
+
+/**
+ * The base branch geet recorded for `branch`, or undefined when none is set.
+ */
+export async function getBranchBase(branch: string): Promise<string | undefined> {
+  const result = await execa('git', ['config', '--local', '--get', baseKey(branch)], {
+    reject: false,
+  });
+  const value = result.exitCode === 0 ? String(result.stdout).trim() : '';
+  return value || undefined;
+}
+
+export async function setBranchBase(branch: string, base: string) {
+  return git(['config', '--local', baseKey(branch), base]);
+}
+
+/**
+ * Best-effort guess from the branch reflog, whose first entry reads
+ * "branch: Created from <ref>". Only yields a name when the branch was created from a
+ * named branch (not HEAD or a SHA); reflog entries also expire.
+ */
+export async function guessBranchBase(branch: string): Promise<string | undefined> {
+  const result = await execa('git', ['reflog', 'show', '--format=%gs', `refs/heads/${branch}`], {
+    reject: false,
+  });
+  if (result.exitCode !== 0) return undefined;
+  const lines = String(result.stdout).split('\n').filter(Boolean);
+  const match = /^branch: Created from (.+)$/.exec(lines[lines.length - 1] ?? '');
+  const ref = match?.[1]?.trim();
+  if (!ref || ref === 'HEAD' || /^[0-9a-f]{7,40}$/.test(ref)) return undefined;
+  return ref.replace(/^refs\/heads\//, '');
+}
+
+/**
  * Lists all worktrees by parsing `git worktree list --porcelain`.
  */
 export async function listWorktrees(): Promise<Worktree[]> {
@@ -327,6 +386,40 @@ export async function mergeBranch(
   if (opts.noCommit) args.push('--no-commit');
   args.push(source);
   return git(args);
+}
+
+/**
+ * Fast-forwards a local branch to origin/<branch> (fetching first). Never creates a
+ * merge commit: git refuses when the branch has diverged from origin.
+ *
+ * With `dir` (a worktree that has the branch checked out) it merges `--ff-only` there,
+ * since git won't let you update a branch that is checked out in another worktree via
+ * `fetch origin branch:branch`. Without it the ref is updated directly, no checkout needed.
+ */
+export async function fastForwardBranch(branch: string, dir?: string): Promise<void> {
+  if (dir) {
+    await git(['fetch', 'origin', branch], { cwd: dir });
+    await git(['merge', '--ff-only', `origin/${branch}`], { cwd: dir });
+  } else {
+    await git(['fetch', 'origin', `${branch}:${branch}`]);
+  }
+}
+
+/**
+ * Rebases the current branch onto `onto`.
+ */
+export async function rebaseOnto(onto: string) {
+  return git(['rebase', onto]);
+}
+
+/**
+ * Returns [behind, ahead]: commits in `base` that `branch` lacks, and commits in `branch`
+ * that `base` lacks.
+ */
+export async function countBehindAhead(base: string, branch: string): Promise<[number, number]> {
+  const out = await git(['rev-list', '--left-right', '--count', `${base}...${branch}`]);
+  const [behind, ahead] = out.split(/\s+/).map(Number);
+  return [behind ?? 0, ahead ?? 0];
 }
 
 /**

@@ -92,7 +92,7 @@ geet sts list
 
 Manage git worktrees. Running `geet worktree` with no subcommand is the same as `geet worktree list`.
 
-Subcommands: `new`, `add`, `list`, `remove`, `close`, `prune`, `rename`, `link-fix`, `pull`, `merge`
+Subcommands: `new`, `add`, `list`, `remove`, `close`, `prune`, `rename`, `link-fix`, `pull`, `merge`, `base`
 
 After a worktree is created (`new` / `add`), geet:
 
@@ -240,6 +240,38 @@ Select a worktree branch to merge into the **current branch**. If you have uncom
 ```sh
 geet wt merge
 geet wt merge -p
+```
+
+---
+
+### `geet worktree base`
+
+Git doesn't remember which branch another was created from, so geet records it in the repo's local git config as `branch.<name>.geet-base` (per branch, shared by all worktrees, never pushed). `wt new` records the branch you ran it from, and `wt rename` carries it over. For other branches geet falls back to the branch reflog ("Created from …"), and if that fails it asks you to pick one — either way the result is recorded.
+
+With no subcommand it shows the current branch's base, the worktree it's checked out in, and how far behind/ahead you are.
+
+| Subcommand          | Description                                                                                                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `base show`         | Print just the base branch name (no decoration, handy in scripts).                                                                                                         |
+| `base pull`         | Fast-forward the base from origin. If the base is checked out in another worktree it is updated there; otherwise its ref is updated directly. Never creates merge commits. |
+| `base merge`        | Pull the base, then merge it into the current branch.                                                                                                                      |
+| `base rebase`       | Pull the base, then rebase the current branch onto it.                                                                                                                     |
+| `base open`         | Open the worktree that has the base checked out (shell, or herdr workspace when enabled).                                                                                  |
+| `base set [branch]` | Record the base of the current branch (prompts when `branch` is omitted).                                                                                                  |
+
+| Flag        | Applies to                | Description                                                                    |
+| ----------- | ------------------------- | ------------------------------------------------------------------------------ |
+| `--force`   | `pull`, `merge`, `rebase` | Pull even if the base's worktree has uncommitted changes (refused by default). |
+| `--no-pull` | `merge`, `rebase`         | Use the local base as-is, without pulling it first.                            |
+
+`merge` and `rebase` use the same uncommitted-changes prompt as `wt merge`.
+
+```sh
+geet wt base              # where am I relative to my base?
+geet wt base show         # prints e.g. `develop`
+geet wt base pull         # update develop, even though it's checked out elsewhere
+geet wt base rebase       # pull develop, then rebase this branch onto it
+geet wt base open         # jump to the develop worktree
 ```
 
 ---
@@ -423,7 +455,7 @@ src/
     ├── stash.ts
     ├── copy.ts
     ├── mergeRelease.ts
-    ├── worktree/         # index, create, list, remove, rename, linkFix, pullMerge
+    ├── worktree/         # index, create, list, remove, rename, linkFix, pullMerge, base
     │   └── utils/        # herdr (herdr CLI calls), openWorktree, initScripts, shell,
     │                     # symlinks, naming, loadWorktrees
     └── config/           # index, list, edit, projectMap, initScript

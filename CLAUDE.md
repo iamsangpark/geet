@@ -42,9 +42,9 @@ src/
     ├── checkout.ts
     ├── stash.ts
     ├── worktree/
-    │   ├── index.ts, create.ts, list.ts, remove.ts, rename.ts, linkFix.ts, pullMerge.ts
+    │   ├── index.ts, create.ts, list.ts, remove.ts, rename.ts, linkFix.ts, pullMerge.ts, base.ts
     │   └── utils/   # herdr.ts (herdr CLI calls via execa + HERDR_ENV detection), openWorktree, shell,
-    │                # initScripts, symlinks, naming, loadWorktrees
+    │                # initScripts, symlinks, naming, loadWorktrees, baseBranch
     ├── copy.ts
     ├── config/
     │   ├── index.ts, list.ts, edit.ts, projectMap.ts, initScript.ts

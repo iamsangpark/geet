@@ -41,7 +41,7 @@ export async function worktreePullAction() {
 
 // ── worktree merge ────────────────────────────────────────────────────────────
 
-async function guardBeforeMerge(): Promise<void> {
+export async function guardBeforeMerge(): Promise<void> {
   const changes = await getUncommittedChanges();
   if (changes) {
     logWarn(`Uncommitted changes detected:\n${changes}`);

@@ -6,11 +6,18 @@
  */
 
 import path from 'path';
-import { GeetError } from '../../utils/errors.ts';
+import { GeetError, userMessage } from '../../utils/errors.ts';
 import { WORKTREE_BASE, BRANCH_PREFIX, SYMLINK_PATHS, readProjectMap } from '../../config.ts';
-import { addWorktree, getMainWorktree, listLocalBranches } from '../../utils/git.ts';
+import {
+  addWorktree,
+  getCurrentBranch,
+  getMainWorktree,
+  listLocalBranches,
+  localBranchExists,
+  setBranchBase,
+} from '../../utils/git.ts';
 import { copyToClipboard } from '../../utils/clipboard.ts';
-import { intro, logInfo, spinner } from '../../prompts/common.ts';
+import { intro, logInfo, logWarn, spinner } from '../../prompts/common.ts';
 import {
   promptWorktreeSmartAdd,
   promptWorktreeProjectName,
@@ -83,10 +90,21 @@ async function worktreeCreateImpl(introText: string, options: CreateOptions) {
   // than the terminal wraps, leaving a repeated copy per animation frame.
   logInfo(`Worktree path: ${resolvedDir}`);
   logInfo(`Branch:        ${branch}`);
+  // A new branch is cut from the HEAD of the directory geet runs in, so that branch is its base.
+  const baseBranch = (await localBranchExists(branch)) ? undefined : await getCurrentBranch();
   const s = spinner();
   s.start('Adding worktree...');
   await addWorktree(branch, resolvedDir);
   s.stop('Worktree created.');
+
+  if (baseBranch && baseBranch !== 'HEAD') {
+    try {
+      await setBranchBase(branch, baseBranch);
+      logInfo(`Base branch:   ${baseBranch}`);
+    } catch (err) {
+      logWarn(`Could not record base branch: ${userMessage(err)}`);
+    }
+  }
 
   await copyToClipboard(resolvedDir, 'Path copied to clipboard');
 
