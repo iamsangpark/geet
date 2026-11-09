@@ -322,6 +322,16 @@ geet merge-release release/1.2.0 develop --no-change
 
 ---
 
+### `geet track`
+
+Set the current branch's upstream to `origin/<current-branch>`, so plain `git push` / `git pull` work without the "no tracking information" prompt. It works even if the branch hasn't been pushed to origin yet.
+
+```sh
+geet track
+```
+
+---
+
 ## Configuration
 
 Config values are loaded from the following sources, lowest to highest priority:
@@ -423,6 +433,7 @@ src/
     ├── stash.ts
     ├── copy.ts
     ├── mergeRelease.ts
+    ├── track.ts
     ├── worktree/         # index, create, list, remove, rename, linkFix, pullMerge
     │   └── utils/        # herdr (herdr CLI calls), openWorktree, initScripts, shell,
     │                     # symlinks, naming, loadWorktrees
