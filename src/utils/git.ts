@@ -115,6 +115,16 @@ export async function remoteTrackingExists(branch: string): Promise<boolean> {
   return result.exitCode === 0;
 }
 
+/**
+ * Points a branch's upstream at origin/<branch> by writing branch.<name>.remote/merge
+ * directly. Unlike `git branch --set-upstream-to`, this works before the branch exists
+ * on origin, so a later `git push` + `git pull` need no further setup.
+ */
+export async function setUpstreamToOrigin(branch: string): Promise<void> {
+  await git(['config', `branch.${branch}.remote`, 'origin']);
+  await git(['config', `branch.${branch}.merge`, `refs/heads/${branch}`]);
+}
+
 // ── Checkout ─────────────────────────────────────────────────────────────────
 
 export async function checkoutBranch(branch: string) {

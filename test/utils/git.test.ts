@@ -25,6 +25,7 @@ import {
   pullBranch,
   remoteTrackingExists,
   resetWorktree,
+  setUpstreamToOrigin,
   stashSave,
 } from '../../src/utils/git.ts';
 
@@ -292,5 +293,14 @@ describe('pullBranch', () => {
     mockGit('', 'feat', '');
     await pullBranch('feat');
     expect(gitArgs(2)).toEqual(['merge', 'origin/feat']);
+  });
+});
+
+describe('setUpstreamToOrigin', () => {
+  it('writes branch.<name>.remote and .merge', async () => {
+    mockGit('', '');
+    await setUpstreamToOrigin('feat/x');
+    expect(gitArgs(0)).toEqual(['config', 'branch.feat/x.remote', 'origin']);
+    expect(gitArgs(1)).toEqual(['config', 'branch.feat/x.merge', 'refs/heads/feat/x']);
   });
 });

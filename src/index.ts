@@ -33,6 +33,7 @@ import { registerWorktreeCommand } from './commands/worktree/index.ts';
 import { registerCopyCommand } from './commands/copy.ts';
 import { registerConfigCommand } from './commands/config/index.ts';
 import { registerMergeReleaseCommand } from './commands/mergeRelease.ts';
+import { registerTrackCommand } from './commands/track.ts';
 
 // ── CJS-only dependencies (must use createRequire in ESM) ─────────────────────
 const require = createRequire(import.meta.url);
@@ -73,6 +74,7 @@ registerWorktreeCommand(program);
 registerCopyCommand(program);
 registerConfigCommand(program);
 registerMergeReleaseCommand(program);
+registerTrackCommand(program);
 
 // ── Autocompletion ────────────────────────────────────────────────────────────
 // Derived from the commander tree: `geet <command>` completes command names and
