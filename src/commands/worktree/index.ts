@@ -7,6 +7,7 @@ import { worktreeRemoveAction, worktreeCloseAction, worktreePruneAction } from '
 import { worktreeRenameAction } from './rename.ts';
 import { worktreeLinkFixAction } from './linkFix.ts';
 import { worktreePullAction, worktreeMergeAction } from './pullMerge.ts';
+import { registerWorktreeBaseCommand } from './base.ts';
 
 export function registerWorktreeCommand(program: Command) {
   const worktreeCmd = program
@@ -83,6 +84,8 @@ export function registerWorktreeCommand(program: Command) {
     .description('Interactively select a worktree branch to merge into the current branch')
     .option('-p, --pull', 'Pull the target branch from origin before merging')
     .action(worktreeMergeAction);
+
+  registerWorktreeBaseCommand(worktreeCmd);
 
   describeWithSubcommands(worktreeCmd, 'Manage git worktrees');
 }
