@@ -4,7 +4,13 @@
  */
 
 import path from 'path';
-import { moveWorktree, checkoutNewBranchInDir, deleteBranch } from '../../utils/git.ts';
+import {
+  moveWorktree,
+  checkoutNewBranchInDir,
+  deleteBranch,
+  getBranchBase,
+  setBranchBase,
+} from '../../utils/git.ts';
 import { intro, outro, logInfo, spinner, promptConfirm } from '../../prompts/common.ts';
 import { promptSelectWorktree, promptWorktreeSmartAdd } from '../../prompts/worktree.ts';
 import { buildWorktreeNames, parseWorktreePath } from './utils/naming.ts';
@@ -45,7 +51,9 @@ export async function worktreeRenameAction() {
   if (newBranch !== oldBranch) {
     const s3 = spinner();
     s3.start(`Creating branch "${newBranch}" and switching worktree...`);
+    const base = await getBranchBase(oldBranch);
     await checkoutNewBranchInDir(newBranch, newDir);
+    if (base) await setBranchBase(newBranch, base);
     s3.stop('Branch renamed.');
 
     const shouldDelete = await promptConfirm(`Delete old branch "${oldBranch}"?`);

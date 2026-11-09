@@ -155,6 +155,19 @@ export async function promptSelectExistingBranch(branches: string[]): Promise<st
 }
 
 /**
+ * Presents a searchable list of branches to pick the current branch's base from.
+ */
+export async function promptSelectBaseBranch(
+  branches: string[],
+  message = 'Select the base branch:',
+): Promise<string> {
+  return searchSelect(
+    message,
+    branches.map((b) => ({ value: b, label: b, searchText: b })),
+  );
+}
+
+/**
  * Ask whether to open a worktree as a herdr workspace or a plain shell.
  * `alreadyOpen`: a herdr workspace already exists for the worktree.
  */

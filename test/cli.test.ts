@@ -45,6 +45,7 @@ describe('geet CLI', () => {
       'link-fix',
       'pull',
       'merge',
+      'base',
     ]);
   });
 
@@ -69,7 +70,7 @@ describe('geet CLI', () => {
     // commander wraps help text to the terminal width
     const help = (await geet('worktree', '--help')).replace(/\s+/g, ' ');
     expect(help).toContain(
-      '(subcommands: new, add, list, remove, close, prune, rename, link-fix, pull, merge)',
+      '(subcommands: new, add, list, remove, close, prune, rename, link-fix, pull, merge, base)',
     );
   });
 });
