@@ -50,6 +50,23 @@ export const logSuccess = (msg: string) => p.log.success(msg);
  */
 export const spinner = () => p.spinner();
 
+/**
+ * Runs `task` behind a spinner; on failure the spinner is closed (so clack doesn't print
+ * "Canceled") before the error propagates to the top-level handler.
+ */
+export async function withSpinner<T>(start: string, done: string, task: () => Promise<T>) {
+  const s = spinner();
+  s.start(start);
+  try {
+    const result = await task();
+    s.stop(done);
+    return result;
+  } catch (err) {
+    s.stop('Failed.');
+    throw err;
+  }
+}
+
 // ── Fuzzy Search Helper ───────────────────────────────────────────────────────
 
 /** True when the characters of `input` appear in `target` in order (case-insensitive). */

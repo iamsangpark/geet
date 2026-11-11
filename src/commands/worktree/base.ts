@@ -5,8 +5,10 @@
  *   base          — show the base and how far the current branch is from it
  *   base show     — print just the base branch name
  *   base set      — record the base branch
- *   base pull     — fast-forward the base from origin (even if checked out in another worktree)
- *   base merge    — merge the base into the current branch
+ *   base pull     — fast-forward the base from origin (even if checked out in another worktree;
+ *                   --chain: every base in the chain)
+ *   base push     — push the base to origin (--chain: every branch in the chain)
+ *   base merge    — merge the base into the current branch (--chain: the whole chain of bases)
  *   base rebase   — rebase the current branch onto the base
  *   base open     — open the worktree that has the base checked out
  */
@@ -20,12 +22,14 @@ import {
   listAllLocalBranches,
   listWorktrees,
   mergeBranch,
+  pushBranch,
   rebaseOnto,
   setBranchBase,
 } from '../../utils/git.ts';
 import { copyToClipboard } from '../../utils/clipboard.ts';
-import { intro, outro, logInfo, spinner } from '../../prompts/common.ts';
+import { intro, outro, logInfo, withSpinner } from '../../prompts/common.ts';
 import { guardBeforeMerge } from './pullMerge.ts';
+import { mergeChain, pullChain, pushChain } from './utils/baseChain.ts';
 import { openHerdrWorkspaces, openWorktree } from './utils/openWorktree.ts';
 import {
   pullBase,
@@ -45,22 +49,6 @@ const SOURCE_LABEL: Record<BaseSource, string> = {
   reflog: 'detected from history',
   selected: 'selected just now',
 };
-
-/**
- * Runs `task` behind a spinner; on failure the spinner is closed (so clack doesn't print
- * "Canceled") before the error propagates to the top-level handler.
- */
-async function withSpinner(start: string, done: string, task: () => Promise<unknown>) {
-  const s = spinner();
-  s.start(start);
-  try {
-    await task();
-  } catch (err) {
-    s.stop('Failed.');
-    throw err;
-  }
-  s.stop(done);
-}
 
 const pullBaseWithSpinner = (base: string, force: boolean | undefined) =>
   withSpinner(`Pulling latest for "${base}"...`, `"${base}" is up to date.`, () =>
@@ -113,11 +101,24 @@ export async function worktreeBaseSetAction(branch?: string) {
 
 // ── base pull ─────────────────────────────────────────────────────────────────
 
-export async function worktreeBasePullAction(options: PullOptions) {
+export async function worktreeBasePullAction(options: PullOptions & { chain?: boolean }) {
+  if (options.chain) return pullChain(options);
   intro('geet wt base pull');
 
   const { base } = await resolveBase();
   await pullBaseWithSpinner(base, options.force);
+
+  outro('Done.');
+}
+
+// ── base push ─────────────────────────────────────────────────────────────────
+
+export async function worktreeBasePushAction(options: { chain?: boolean }) {
+  if (options.chain) return pushChain();
+  intro('geet wt base push');
+
+  const { base } = await resolveBase();
+  await withSpinner(`Pushing "${base}"...`, `Pushed "${base}".`, () => pushBranch(base));
 
   outro('Done.');
 }
@@ -151,7 +152,8 @@ async function syncWithBase(kind: 'merge' | 'rebase', options: PullOptions) {
   outro('Done.');
 }
 
-export const worktreeBaseMergeAction = (options: PullOptions) => syncWithBase('merge', options);
+export const worktreeBaseMergeAction = (options: PullOptions & { chain?: boolean }) =>
+  options.chain ? mergeChain(options) : syncWithBase('merge', options);
 export const worktreeBaseRebaseAction = (options: PullOptions) => syncWithBase('rebase', options);
 
 // ── base open ─────────────────────────────────────────────────────────────────
@@ -204,13 +206,24 @@ export function registerWorktreeBaseCommand(worktreeCmd: Command) {
     .description(
       'Fast-forward the base branch from origin, even if it is checked out in a worktree',
     )
+    .option('--chain', 'Pull every base in the chain up to a root, root first')
     .option(...forceOption)
     .action(worktreeBasePullAction);
+
+  baseCmd
+    .command('push')
+    .description('Push the base branch to origin')
+    .option('--chain', 'Push every branch in the chain, root first, including the current one')
+    .action(worktreeBasePushAction);
 
   baseCmd
     .command('merge')
     .description('Pull the base branch, then merge it into the current branch')
     .option('--no-pull', 'Merge the local base branch without pulling it first')
+    .option(
+      '--chain',
+      'Walk the chain of bases up to a root, then merge each into its child, root first',
+    )
     .option(...forceOption)
     .action(worktreeBaseMergeAction);
 

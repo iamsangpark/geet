@@ -144,18 +144,19 @@ export async function checkoutForce(branch: string) {
 /**
  * Stages all changes including untracked files (`git add -A`).
  */
-export async function gitAddAll() {
-  return git(['add', '-A']);
+export async function gitAddAll(dir?: string) {
+  return git(['add', '-A'], { cwd: dir });
 }
 
 /**
  * Stashes current changes. If `message` is provided, uses it as the stash description.
+ * `dir` runs it in another worktree.
  */
-export async function stashSave(message?: string) {
+export async function stashSave(message?: string, dir?: string) {
   if (message) {
-    return git(['stash', 'push', '-m', message]);
+    return git(['stash', 'push', '-m', message], { cwd: dir });
   }
-  return git(['stash']);
+  return git(['stash'], { cwd: dir });
 }
 
 export async function stashPop() {
@@ -385,17 +386,18 @@ export async function pullBranch(branch: string): Promise<void> {
 }
 
 /**
- * Merges the source branch into the current branch.
+ * Merges the source branch into the current branch (or, with `dir`, into the branch
+ * checked out in that worktree).
  */
 export async function mergeBranch(
   source: string,
-  opts: { noCommit?: boolean; strategy?: 'ours' | null } = {},
+  opts: { noCommit?: boolean; strategy?: 'ours' | null; dir?: string } = {},
 ) {
   const args = ['merge'];
   if (opts.strategy === 'ours') args.push('-X', 'ours');
   if (opts.noCommit) args.push('--no-commit');
   args.push(source);
-  return git(args);
+  return git(args, { cwd: opts.dir });
 }
 
 /**
@@ -413,6 +415,14 @@ export async function fastForwardBranch(branch: string, dir?: string): Promise<v
   } else {
     await git(['fetch', 'origin', `${branch}:${branch}`]);
   }
+}
+
+/**
+ * Pushes a local branch to the same-named branch on origin, from any worktree (no checkout
+ * needed). Never forced: git refuses when origin has commits the branch lacks.
+ */
+export async function pushBranch(branch: string): Promise<void> {
+  await git(['push', 'origin', `refs/heads/${branch}:refs/heads/${branch}`]);
 }
 
 /**
