@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.0](https://github.com/iamsangpark/geet/compare/v1.4.0...v1.5.0) (2026-11-11)
+
+
+### Features
+
+* add --chain to wt base merge/pull and add wt base push ([#23](https://github.com/iamsangpark/geet/issues/23)) ([68cd109](https://github.com/iamsangpark/geet/commit/68cd1093da61302e0fde58fb18a725c3a21b804f))
+* add `wt base` commands to manage a branch's base branch ([#20](https://github.com/iamsangpark/geet/issues/20)) ([7d03b89](https://github.com/iamsangpark/geet/commit/7d03b8929155f093d45eee85e9fa53020c501188))
+* add track command to set upstream to origin/&lt;branch&gt; ([#22](https://github.com/iamsangpark/geet/issues/22)) ([7a40c99](https://github.com/iamsangpark/geet/commit/7a40c99401c63310bf4b96d5e313e4b87e2fa73f))
+
 ## [1.4.0](https://github.com/iamsangpark/geet/compare/v1.3.0...v1.4.0) (2026-11-03)
 
 
