@@ -72,11 +72,11 @@ export async function promptMultiSelectWorktrees(
 /**
  * Shown before `worktree merge` when there are uncommitted changes.
  */
-export async function promptUncommittedChangesForMerge(): Promise<
-  'add-and-stash' | 'stash-first' | 'merge-anyway'
-> {
+export async function promptUncommittedChangesForMerge({
+  message = 'You have uncommitted changes. How should we proceed?',
+}: { message?: string } = {}): Promise<'add-and-stash' | 'stash-first' | 'merge-anyway'> {
   const action = await p.select<'add-and-stash' | 'stash-first' | 'merge-anyway'>({
-    message: 'You have uncommitted changes. How should we proceed?',
+    message,
     options: [
       { value: 'add-and-stash', label: 'Add all untracked files, then stash' },
       { value: 'stash-first', label: 'Stash tracked changes only, then merge' },
@@ -165,6 +165,44 @@ export async function promptSelectBaseBranch(
     message,
     branches.map((b) => ({ value: b, label: b, searchText: b })),
   );
+}
+
+export type ChainMissingBaseChoice = { kind: 'root' } | { kind: 'base'; base: string };
+
+/**
+ * Shown while walking a base chain when `branch` has no usable base: end the chain here,
+ * use the base detected from history (when there is one), or pick another branch.
+ * `allowRoot: false` hides the "root" option (the current branch can't be the root).
+ * `pickBase` supplies the branch when the user chooses "Pick a base branch…".
+ */
+export async function promptChainMissingBase(
+  branch: string,
+  {
+    detected,
+    allowRoot,
+    pickBase,
+  }: { detected?: string; allowRoot: boolean; pickBase: () => Promise<string> },
+): Promise<ChainMissingBaseChoice> {
+  type Action = 'root' | 'detected' | 'pick';
+  const options: { value: Action; label: string }[] = [];
+  if (allowRoot) options.push({ value: 'root', label: `"${branch}" is the root` });
+  if (detected) {
+    options.push({
+      value: 'detected',
+      label: `Use detected base "${detected}"`,
+    });
+  }
+  options.push({ value: 'pick', label: 'Pick a base branch…' });
+
+  const action = guardCancel(
+    await p.select<Action>({
+      message: `"${branch}" has no recorded base. Where does the chain end?`,
+      options,
+    }),
+  );
+  if (action === 'root') return { kind: 'root' };
+  if (action === 'detected' && detected) return { kind: 'base', base: detected };
+  return { kind: 'base', base: await pickBase() };
 }
 
 /**

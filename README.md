@@ -254,6 +254,7 @@ With no subcommand it shows the current branch's base, the worktree it's checked
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `base show`         | Print just the base branch name (no decoration, handy in scripts).                                                                                                         |
 | `base pull`         | Fast-forward the base from origin. If the base is checked out in another worktree it is updated there; otherwise its ref is updated directly. Never creates merge commits. |
+| `base push`         | Push the base branch to origin (never forced).                                                                                                                             |
 | `base merge`        | Pull the base, then merge it into the current branch.                                                                                                                      |
 | `base rebase`       | Pull the base, then rebase the current branch onto it.                                                                                                                     |
 | `base open`         | Open the worktree that has the base checked out (shell, or herdr workspace when enabled).                                                                                  |
@@ -263,14 +264,28 @@ With no subcommand it shows the current branch's base, the worktree it's checked
 | ----------- | ------------------------- | ------------------------------------------------------------------------------ |
 | `--force`   | `pull`, `merge`, `rebase` | Pull even if the base's worktree has uncommitted changes (refused by default). |
 | `--no-pull` | `merge`, `rebase`         | Use the local base as-is, without pulling it first.                            |
+| `--chain`   | `pull`, `push`, `merge`   | Act on the whole chain of bases, not just the direct base (see below).         |
 
 `merge` and `rebase` use the same uncommitted-changes prompt as `wt merge`.
+
+#### `--chain`: `base merge`, `base pull`, `base push`
+
+For `develop → epic → feature` setups, `--chain` keeps a branch up to date with every ancestor, not just its direct base. geet follows the recorded bases from the current branch upward and prints the chain. When it reaches a branch with no recorded base it asks whether that branch is the root, whether to use the base detected from history, or to pick one (recorded for next time). The root choice is not remembered.
+
+Then it checks each chain branch's worktree for uncommitted changes (same prompt as a single merge; `--force` skips it), asks to confirm, and works from the root down: pull a branch, merge it into its child, repeat until the current branch. Every branch being merged into must be checked out in a worktree (geet stops before changing anything otherwise), and the root is only fast-forwarded. A merge conflict stops the run in that worktree; resolve it and re-run to continue. `base pull --chain` walks and confirms the same way, with the same uncommitted-changes prompt, then fast-forwards each base from the root down. The current branch is left alone, as in a plain `base pull`, and no worktrees are required. If any pull fails (for example the epic has local commits and origin has new ones), it stops there.
+
+`base push --chain` pushes every branch in the chain, root first and including the current branch, after a confirmation. Branches already matching origin are skipped, and pushes are never forced: a rejected push stops the run. A plain `base push` pushes just the base.
+
+There is no `--chain` for `rebase`, since rebasing a shared epic branch rewrites history others have pulled.
 
 ```sh
 geet wt base              # where am I relative to my base?
 geet wt base show         # prints e.g. `develop`
 geet wt base pull         # update develop, even though it's checked out elsewhere
 geet wt base rebase       # pull develop, then rebase this branch onto it
+geet wt base pull --chain   # fast-forward develop and the epic from origin
+geet wt base merge --chain  # develop → epic → this branch, root first
+geet wt base push --chain   # push develop, the epic and this branch
 geet wt base open         # jump to the develop worktree
 ```
 

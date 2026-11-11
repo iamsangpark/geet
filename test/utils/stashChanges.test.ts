@@ -21,8 +21,19 @@ describe('stashCurrentChanges', () => {
     await stashCurrentChanges({ includeUntracked: true });
 
     expect(order).toEqual(['add', 'stash']);
-    expect(stashSave).toHaveBeenCalledWith();
+    expect(stashSave).toHaveBeenCalledWith(undefined, undefined);
     expect(spinnerMock.stop).toHaveBeenCalledWith('All changes staged and stashed.');
+  });
+
+  it('stashes in the given worktree with the given message', async () => {
+    await stashCurrentChanges({
+      includeUntracked: true,
+      dir: '/wt/epic',
+      message: 'geet chain: epic',
+    });
+
+    expect(gitAddAll).toHaveBeenCalledWith('/wt/epic');
+    expect(stashSave).toHaveBeenCalledWith('geet chain: epic', '/wt/epic');
   });
 
   it('only stashes tracked changes otherwise', async () => {
