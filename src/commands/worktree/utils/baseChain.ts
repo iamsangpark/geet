@@ -2,6 +2,8 @@
  * commands/worktree/utils/baseChain.ts
  * `geet wt base merge --chain`: walk the recorded bases from the current branch up to a
  * root, then pull and merge each link into its child, root first.
+ * `--tree` is the mirror image: walk down from the current branch to every worktree whose
+ * recorded base leads back to it (breadth first), then act on that tree, parents first.
  */
 
 import os from 'os';
@@ -40,6 +42,11 @@ export interface ChainLink {
   branch: string;
   /** Worktree that has the branch checked out, if any. */
   path?: string;
+}
+
+/** A branch in the tree below the current branch. `parent` is unset for the current branch. */
+export interface TreeNode extends ChainLink {
+  parent?: string;
 }
 
 interface ChainOptions {
@@ -182,11 +189,11 @@ function logStashes(stashes: StashRecord[]) {
   );
 }
 
+/** Fast-forwards each link from origin, in order. Callers leave the current branch out. */
 async function pullLinks(links: ChainLink[], failHint: string) {
   await withSpinner('Fetching...', 'Fetched.', () => fetchAll());
 
-  // The last link is the current branch; like single-branch mode, it isn't pulled.
-  for (const link of links.slice(0, -1)) {
+  for (const link of links) {
     if (!(await remoteTrackingExists(link.branch))) {
       logInfo(`"${link.branch}" has no remote branch; using the local branch.`);
       continue;
@@ -205,11 +212,14 @@ async function pullLinks(links: ChainLink[], failHint: string) {
   }
 }
 
-async function mergeLinks(links: ChainLink[]) {
-  for (let i = 1; i < links.length; i++) {
-    const parent = links[i - 1]!.branch;
-    const child = links[i]!;
+interface MergeStep {
+  parent: string;
+  child: ChainLink;
+}
 
+/** Merges each step's parent into its child, in order. `rerun` is the command to retry. */
+async function mergeSteps(steps: MergeStep[], rerun: string) {
+  for (const { parent, child } of steps) {
     const [behind] = await countBehindAhead(parent, child.branch);
     if (behind === 0) {
       logInfo(`"${child.branch}" already contains "${parent}".`);
@@ -227,7 +237,7 @@ async function mergeLinks(links: ChainLink[]) {
       throw new GeetError(
         `Merge of "${parent}" into "${child.branch}" failed in ${tildify(child.path!)}: ` +
           `${userMessage(err)}\nResolve and commit there, then re-run ` +
-          '"geet wt base merge --chain" to continue.',
+          `"${rerun}" to continue.`,
       );
     }
   }
@@ -278,13 +288,17 @@ export async function mergeChain({ pull = true, force = false }: ChainOptions) {
 
   await stashThen(dirty, async () => {
     if (pull) {
+      // The last link is the current branch; like single-branch mode, it isn't pulled.
       await pullLinks(
-        links,
+        links.slice(0, -1),
         'No branches were merged. Fix it (e.g. push or merge the origin branch yourself), ' +
           'then re-run, or pass --no-pull to merge the local branches as they are.',
       );
     }
-    await mergeLinks(links);
+    await mergeSteps(
+      links.slice(1).map((child, i) => ({ parent: links[i]!.branch, child })),
+      'geet wt base merge --chain',
+    );
   });
   outro('Done.');
 }
@@ -308,7 +322,7 @@ export async function pullChain({ force = false }: ChainOptions) {
   }
 
   await stashThen(dirty, () =>
-    pullLinks(links, 'Branches before it in the chain were already pulled.'),
+    pullLinks(pulled, 'Branches before it in the chain were already pulled.'),
   );
   outro('Done.');
 }
@@ -328,6 +342,12 @@ export async function pushChain() {
     return;
   }
 
+  await pushLinks(links, 'geet wt base pull --chain');
+  outro('Done.');
+}
+
+/** Pushes each link that differs from origin, in order. */
+async function pushLinks(links: ChainLink[], pullCommand: string) {
   await withSpinner('Fetching...', 'Fetched.', () => fetchAll());
 
   for (const link of links) {
@@ -342,11 +362,10 @@ export async function pushChain() {
     } catch (err) {
       throw new GeetError(
         `Could not push "${link.branch}": ${userMessage(err)}\n` +
-          'If origin has newer commits, run "geet wt base pull --chain" (or merge them) and re-run.',
+          `If origin has newer commits, run "${pullCommand}" (or merge them) and re-run.`,
       );
     }
   }
-  outro('Done.');
 }
 
 /** True when origin/<branch> exists and points at the same commit as the local branch. */
@@ -354,4 +373,140 @@ async function isPushed(branch: string): Promise<boolean> {
   if (!(await remoteTrackingExists(branch))) return false;
   const [behind, ahead] = await countBehindAhead(`origin/${branch}`, branch);
   return behind === 0 && ahead === 0;
+}
+
+// ── --tree ────────────────────────────────────────────────────────────────────
+
+/**
+ * Breadth-first walk down from `root`: every worktree whose recorded base is `root`, then
+ * the worktrees based on those, and so on. Returns the nodes in visiting order, root first.
+ * Only recorded bases are followed, and only branches checked out in a worktree are found.
+ */
+export async function resolveTree(root: string, worktrees: Worktree[]): Promise<TreeNode[]> {
+  const candidates: { branch: string; path: string; base?: string }[] = [];
+  for (const w of worktrees) {
+    if (w.branch && w.branch !== root) {
+      candidates.push({ branch: w.branch, path: w.path, base: await getBranchBase(w.branch) });
+    }
+  }
+
+  const nodes: TreeNode[] = [{ branch: root, path: worktreePath(worktrees, root) }];
+  const seen = new Set([root]);
+  for (const node of nodes) {
+    for (const c of candidates) {
+      if (c.base === node.branch && !seen.has(c.branch)) {
+        seen.add(c.branch);
+        nodes.push({ branch: c.branch, path: c.path, parent: node.branch });
+      }
+    }
+  }
+  return nodes;
+}
+
+/** The "Branch tree" block: the current branch at the top, each branch under its base. */
+export function formatTree(nodes: TreeNode[]): string {
+  const lines: string[] = [];
+  const render = (branch: string, prefix: string, tail: string, isRoot: boolean) => {
+    const node = nodes.find((n) => n.branch === branch)!;
+    const where = node.path ? tildify(node.path) : 'not checked out';
+    lines.push(`${prefix}${tail}${branch}${isRoot ? ' (current)' : ''}  ${where}`);
+    const kids = nodes.filter((n) => n.parent === branch);
+    kids.forEach((kid, i) => {
+      const last = i === kids.length - 1;
+      const childPrefix = isRoot ? prefix : prefix + (tail === '└─ ' ? '   ' : '│  ');
+      render(kid.branch, childPrefix, last ? '└─ ' : '├─ ', false);
+    });
+  };
+  render(nodes[0]!.branch, '  ', '', true);
+  return `Branch tree:\n${lines.join('\n')}`;
+}
+
+/** Resolves and shows the tree below the current branch; undefined when it has no children. */
+async function planTree(): Promise<TreeNode[] | undefined> {
+  const worktrees = await listWorktrees();
+  const nodes = await resolveTree(await requireCurrentBranch(), worktrees);
+  if (nodes.length === 1) {
+    outro(`No worktrees use "${nodes[0]!.branch}" as their base.`);
+    return undefined;
+  }
+  logInfo(formatTree(nodes));
+  return nodes;
+}
+
+const count = (n: number) => `${n} ${n === 1 ? 'branch' : 'branches'}`;
+
+/**
+ * `geet wt base merge --tree`: pulls every descendant of the current branch, then merges
+ * each branch into its children, parents first. The current branch is left as it is.
+ */
+export async function mergeTree({ pull = true, force = false }: ChainOptions) {
+  intro('geet wt base merge --tree');
+
+  const nodes = await planTree();
+  if (!nodes) return;
+  const below = nodes.slice(1);
+
+  const dirty = await collectDirtyActions(below, force);
+
+  if (!(await promptConfirm(`Merge into ${count(below.length)} as shown?`))) {
+    outro('Cancelled.');
+    return;
+  }
+
+  await stashThen(dirty, async () => {
+    if (pull) {
+      await pullLinks(
+        below,
+        'No branches were merged. Fix it (e.g. push or merge the origin branch yourself), ' +
+          'then re-run, or pass --no-pull to merge the local branches as they are.',
+      );
+    }
+    await mergeSteps(
+      below.map((child) => ({ parent: child.parent!, child })),
+      'geet wt base merge --tree',
+    );
+  });
+  outro('Done.');
+}
+
+/**
+ * `geet wt base pull --tree`: fast-forwards every descendant of the current branch from
+ * origin, parents first. The current branch is left alone, as with a plain `base pull`.
+ */
+export async function pullTree({ force = false }: ChainOptions) {
+  intro('geet wt base pull --tree');
+
+  const nodes = await planTree();
+  if (!nodes) return;
+  const below = nodes.slice(1);
+
+  const dirty = await collectDirtyActions(below, force);
+
+  if (!(await promptConfirm(`Pull ${count(below.length)} as shown?`))) {
+    outro('Cancelled.');
+    return;
+  }
+
+  await stashThen(dirty, () =>
+    pullLinks(below, 'Branches before it in the tree were already pulled.'),
+  );
+  outro('Done.');
+}
+
+/**
+ * `geet wt base push --tree`: pushes the current branch and every descendant to origin,
+ * parents first. Never forced, so a branch that has diverged from origin stops the run.
+ */
+export async function pushTree() {
+  intro('geet wt base push --tree');
+
+  const nodes = await planTree();
+  if (!nodes) return;
+
+  if (!(await promptConfirm(`Push ${count(nodes.length)} to origin as shown?`))) {
+    outro('Cancelled.');
+    return;
+  }
+  await pushLinks(nodes, 'geet wt base pull --tree');
+  outro('Done.');
 }

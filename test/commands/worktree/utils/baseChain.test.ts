@@ -33,11 +33,16 @@ vi.mock('../../../../src/commands/worktree/utils/baseBranch.ts', () => ({
 }));
 
 import {
+  formatTree,
   mergeChain,
+  mergeTree,
   planChain,
   pullChain,
+  pullTree,
   pushChain,
+  pushTree,
   resolveChain,
+  resolveTree,
 } from '../../../../src/commands/worktree/utils/baseChain.ts';
 import { requireCurrentBranch } from '../../../../src/commands/worktree/utils/baseBranch.ts';
 import { logInfo, promptConfirm } from '../../../../src/prompts/common.ts';
@@ -288,5 +293,114 @@ describe('pushChain', () => {
     vi.mocked(promptConfirm).mockResolvedValue(false);
     await pushChain();
     expect(pushBranch).not.toHaveBeenCalled();
+  });
+});
+
+describe('--tree', () => {
+  // develop (current) ← a, b ; a ← a1 ; b ← b1 ; stray has no recorded base
+  const TREE_WTS = [
+    wt('develop', '/wt/develop'),
+    wt('b1', '/wt/b1'),
+    wt('a', '/wt/a'),
+    wt('a1', '/wt/a1'),
+    wt('b', '/wt/b'),
+    wt('stray', '/wt/stray'),
+  ];
+  const treeBases: Record<string, string> = { a: 'develop', b: 'develop', a1: 'a', b1: 'b' };
+
+  beforeEach(() => {
+    vi.mocked(requireCurrentBranch).mockResolvedValue('develop');
+    vi.mocked(listWorktrees).mockResolvedValue(TREE_WTS);
+    vi.mocked(getBranchBase).mockImplementation(async (b) => treeBases[b]);
+  });
+
+  it('walks breadth first and ignores unrelated worktrees', async () => {
+    const nodes = await resolveTree('develop', TREE_WTS);
+    expect(nodes.map((n) => [n.branch, n.parent])).toEqual([
+      ['develop', undefined],
+      ['a', 'develop'],
+      ['b', 'develop'],
+      ['a1', 'a'],
+      ['b1', 'b'],
+    ]);
+  });
+
+  it('does not loop on a cycle back to the root', async () => {
+    vi.mocked(getBranchBase).mockImplementation(async (b) =>
+      b === 'develop' ? 'a' : treeBases[b],
+    );
+    const nodes = await resolveTree('develop', TREE_WTS);
+    expect(nodes.map((n) => n.branch)).toEqual(['develop', 'a', 'b', 'a1', 'b1']);
+  });
+
+  it('draws the tree', async () => {
+    const out = formatTree(await resolveTree('develop', TREE_WTS));
+    expect(out).toBe(
+      [
+        'Branch tree:',
+        '  develop (current)  /wt/develop',
+        '  ├─ a  /wt/a',
+        '  │  └─ a1  /wt/a1',
+        '  └─ b  /wt/b',
+        '     └─ b1  /wt/b1',
+      ].join('\n'),
+    );
+  });
+
+  it('merges each parent into its child in breadth-first order, after pulling', async () => {
+    await mergeTree({});
+    expect(vi.mocked(fastForwardBranch).mock.calls.map((c) => c[0])).toEqual([
+      'a',
+      'b',
+      'a1',
+      'b1',
+    ]);
+    expect(vi.mocked(mergeBranch).mock.calls).toEqual([
+      ['develop', { dir: '/wt/a' }],
+      ['develop', { dir: '/wt/b' }],
+      ['a', { dir: '/wt/a1' }],
+      ['b', { dir: '/wt/b1' }],
+    ]);
+  });
+
+  it('merges without pulling with --no-pull', async () => {
+    await mergeTree({ pull: false });
+    expect(fastForwardBranch).not.toHaveBeenCalled();
+    expect(mergeBranch).toHaveBeenCalledTimes(4);
+  });
+
+  it('does nothing when the user declines', async () => {
+    vi.mocked(promptConfirm).mockResolvedValue(false);
+    await mergeTree({});
+    expect(mergeBranch).not.toHaveBeenCalled();
+    expect(fastForwardBranch).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no worktree is based on the current branch', async () => {
+    vi.mocked(listWorktrees).mockResolvedValue([wt('develop', '/wt/develop')]);
+    await pushTree();
+    expect(promptConfirm).not.toHaveBeenCalled();
+    expect(pushBranch).not.toHaveBeenCalled();
+  });
+
+  it('pulls only the descendants, not the current branch', async () => {
+    await pullTree({});
+    expect(vi.mocked(fastForwardBranch).mock.calls.map((c) => c[0])).toEqual([
+      'a',
+      'b',
+      'a1',
+      'b1',
+    ]);
+  });
+
+  it('pushes the current branch and descendants, parents first', async () => {
+    await pushTree();
+    expect(vi.mocked(pushBranch).mock.calls.map((c) => c[0])).toEqual([
+      'develop',
+      'a',
+      'b',
+      'a1',
+      'b1',
+    ]);
   });
 });
