@@ -6,9 +6,11 @@
  *   base show     — print just the base branch name
  *   base set      — record the base branch
  *   base pull     — fast-forward the base from origin (even if checked out in another worktree;
- *                   --chain: every base in the chain)
- *   base push     — push the base to origin (--chain: every branch in the chain)
- *   base merge    — merge the base into the current branch (--chain: the whole chain of bases)
+ *                   --chain: every base in the chain; --tree: every branch based on this one)
+ *   base push     — push the base to origin (--chain: every branch in the chain;
+ *                   --tree: this branch and every branch based on it)
+ *   base merge    — merge the base into the current branch (--chain: the whole chain of bases;
+ *                   --tree: merge this branch down into every branch based on it)
  *   base rebase   — rebase the current branch onto the base
  *   base open     — open the worktree that has the base checked out
  */
@@ -29,7 +31,14 @@ import {
 import { copyToClipboard } from '../../utils/clipboard.ts';
 import { intro, outro, logInfo, withSpinner } from '../../prompts/common.ts';
 import { guardBeforeMerge } from './pullMerge.ts';
-import { mergeChain, pullChain, pushChain } from './utils/baseChain.ts';
+import {
+  mergeChain,
+  mergeTree,
+  pullChain,
+  pullTree,
+  pushChain,
+  pushTree,
+} from './utils/baseChain.ts';
 import { openHerdrWorkspaces, openWorktree } from './utils/openWorktree.ts';
 import {
   pullBase,
@@ -42,6 +51,16 @@ import {
 interface PullOptions {
   pull?: boolean;
   force?: boolean;
+}
+
+interface ScopeOptions {
+  chain?: boolean;
+  tree?: boolean;
+}
+
+/** --chain and --tree pick different scopes, so they can't be combined. */
+function requireSingleScope({ chain, tree }: ScopeOptions) {
+  if (chain && tree) throw new GeetError('Use either --chain or --tree, not both.');
 }
 
 const SOURCE_LABEL: Record<BaseSource, string> = {
@@ -101,8 +120,10 @@ export async function worktreeBaseSetAction(branch?: string) {
 
 // ── base pull ─────────────────────────────────────────────────────────────────
 
-export async function worktreeBasePullAction(options: PullOptions & { chain?: boolean }) {
+export async function worktreeBasePullAction(options: PullOptions & ScopeOptions) {
+  requireSingleScope(options);
   if (options.chain) return pullChain(options);
+  if (options.tree) return pullTree(options);
   intro('geet wt base pull');
 
   const { base } = await resolveBase();
@@ -113,8 +134,10 @@ export async function worktreeBasePullAction(options: PullOptions & { chain?: bo
 
 // ── base push ─────────────────────────────────────────────────────────────────
 
-export async function worktreeBasePushAction(options: { chain?: boolean }) {
+export async function worktreeBasePushAction(options: ScopeOptions) {
+  requireSingleScope(options);
   if (options.chain) return pushChain();
+  if (options.tree) return pushTree();
   intro('geet wt base push');
 
   const { base } = await resolveBase();
@@ -152,8 +175,12 @@ async function syncWithBase(kind: 'merge' | 'rebase', options: PullOptions) {
   outro('Done.');
 }
 
-export const worktreeBaseMergeAction = (options: PullOptions & { chain?: boolean }) =>
-  options.chain ? mergeChain(options) : syncWithBase('merge', options);
+export function worktreeBaseMergeAction(options: PullOptions & ScopeOptions) {
+  requireSingleScope(options);
+  if (options.chain) return mergeChain(options);
+  if (options.tree) return mergeTree(options);
+  return syncWithBase('merge', options);
+}
 export const worktreeBaseRebaseAction = (options: PullOptions) => syncWithBase('rebase', options);
 
 // ── base open ─────────────────────────────────────────────────────────────────
@@ -207,6 +234,7 @@ export function registerWorktreeBaseCommand(worktreeCmd: Command) {
       'Fast-forward the base branch from origin, even if it is checked out in a worktree',
     )
     .option('--chain', 'Pull every base in the chain up to a root, root first')
+    .option('--tree', 'Pull every worktree branch based on the current one, breadth first')
     .option(...forceOption)
     .action(worktreeBasePullAction);
 
@@ -214,6 +242,7 @@ export function registerWorktreeBaseCommand(worktreeCmd: Command) {
     .command('push')
     .description('Push the base branch to origin')
     .option('--chain', 'Push every branch in the chain, root first, including the current one')
+    .option('--tree', 'Push the current branch and every worktree branch based on it')
     .action(worktreeBasePushAction);
 
   baseCmd
@@ -223,6 +252,10 @@ export function registerWorktreeBaseCommand(worktreeCmd: Command) {
     .option(
       '--chain',
       'Walk the chain of bases up to a root, then merge each into its child, root first',
+    )
+    .option(
+      '--tree',
+      'Merge the current branch into the worktree branches based on it, then those into theirs, breadth first',
     )
     .option(...forceOption)
     .action(worktreeBaseMergeAction);

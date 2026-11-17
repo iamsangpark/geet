@@ -265,6 +265,7 @@ With no subcommand it shows the current branch's base, the worktree it's checked
 | `--force`   | `pull`, `merge`, `rebase` | Pull even if the base's worktree has uncommitted changes (refused by default). |
 | `--no-pull` | `merge`, `rebase`         | Use the local base as-is, without pulling it first.                            |
 | `--chain`   | `pull`, `push`, `merge`   | Act on the whole chain of bases, not just the direct base (see below).         |
+| `--tree`    | `pull`, `push`, `merge`   | Act on every worktree branch based on the current one, going down (see below). |
 
 `merge` and `rebase` use the same uncommitted-changes prompt as `wt merge`.
 
@@ -276,6 +277,14 @@ Then it checks each chain branch's worktree for uncommitted changes (same prompt
 
 `base push --chain` pushes every branch in the chain, root first and including the current branch, after a confirmation. Branches already matching origin are skipped, and pushes are never forced: a rejected push stops the run. A plain `base push` pushes just the base.
 
+#### `--tree`: `base merge`, `base pull`, `base push`
+
+The mirror image of `--chain`: instead of going up to the bases, geet goes down. Starting from the current branch it finds every worktree whose recorded base is the current branch, then the worktrees based on those, and so on (breadth first). Only recorded bases (`geet wt base set`) in existing worktrees are followed. It prints the tree, checks the descendants' worktrees for uncommitted changes (same prompt; `--force` skips it), and asks to confirm. `--chain` and `--tree` can't be combined.
+
+- `base merge --tree` pulls every descendant from origin (skip with `--no-pull`), then merges each branch into its children, parents first. The current branch is the source and is neither pulled nor changed. A merge conflict stops the run in that worktree; resolve it and re-run to continue.
+- `base pull --tree` fast-forwards every descendant from origin, parents first.
+- `base push --tree` pushes the current branch and every descendant, parents first, never forced.
+
 There is no `--chain` for `rebase`, since rebasing a shared epic branch rewrites history others have pulled.
 
 ```sh
@@ -286,6 +295,7 @@ geet wt base rebase       # pull develop, then rebase this branch onto it
 geet wt base pull --chain   # fast-forward develop and the epic from origin
 geet wt base merge --chain  # develop → epic → this branch, root first
 geet wt base push --chain   # push develop, the epic and this branch
+geet wt base merge --tree   # this branch → every branch based on it, breadth first
 geet wt base open         # jump to the develop worktree
 ```
 
