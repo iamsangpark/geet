@@ -283,7 +283,32 @@ describe('pushChain', () => {
     expect(vi.mocked(pushBranch).mock.calls).toEqual([['develop'], ['feat']]);
   });
 
+  it('lists only branches with changes to push before asking', async () => {
+    vi.mocked(countBehindAhead).mockImplementation(async (base) =>
+      base === 'origin/epic' ? [0, 0] : [0, 3],
+    );
+    await pushChain();
+    const shown = vi
+      .mocked(logInfo)
+      .mock.calls.map((c) => String(c[0]))
+      .find((m) => m.startsWith('Branches with changes'))!;
+    expect(shown).toMatch(/develop\s+3 commits to push/);
+    expect(shown).toMatch(/feat\s+3 commits to push/);
+    expect(shown).not.toMatch(/epic/);
+    expect(promptConfirm).toHaveBeenCalledWith('Push 2 branches to origin?', {
+      initialValue: false,
+    });
+  });
+
+  it('does not ask when everything is already on origin', async () => {
+    vi.mocked(countBehindAhead).mockResolvedValue([0, 0]);
+    await pushChain();
+    expect(promptConfirm).not.toHaveBeenCalled();
+    expect(pushBranch).not.toHaveBeenCalled();
+  });
+
   it('stops when a push is rejected, naming the branch', async () => {
+    vi.mocked(countBehindAhead).mockResolvedValue([0, 1]);
     vi.mocked(pushBranch).mockResolvedValueOnce().mockRejectedValueOnce(new Error('rejected'));
     await expect(pushChain()).rejects.toThrow(/Could not push "epic".*rejected/s);
     expect(pushBranch).toHaveBeenCalledTimes(2);
@@ -394,6 +419,7 @@ describe('--tree', () => {
   });
 
   it('pushes the current branch and descendants, parents first', async () => {
+    vi.mocked(countBehindAhead).mockResolvedValue([0, 1]);
     await pushTree();
     expect(vi.mocked(pushBranch).mock.calls.map((c) => c[0])).toEqual([
       'develop',

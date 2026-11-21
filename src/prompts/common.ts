@@ -116,9 +116,13 @@ export async function searchSelect<T>(message: string, options: SearchOption<T>[
 }
 
 /**
- * Prompts the user to confirm an action (yes/no).
+ * Prompts the user to confirm an action (yes/no). Pass `initialValue: false` to make
+ * "No" the default, so a stray Enter doesn't confirm.
  */
-export async function promptConfirm(message: string): Promise<boolean> {
-  const confirmed = await p.confirm({ message });
+export async function promptConfirm(
+  message: string,
+  options: { initialValue?: boolean } = {},
+): Promise<boolean> {
+  const confirmed = await p.confirm({ message, ...options });
   return guardCancel(confirmed);
 }
