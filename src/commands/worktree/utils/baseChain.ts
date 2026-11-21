@@ -268,6 +268,8 @@ async function stashThen(dirty: Map<ChainLink, DirtyAction>, task: () => Promise
   logStashes(stashes);
 }
 
+const count = (n: number) => `${n} ${n === 1 ? 'branch' : 'branches'}`;
+
 const arrow = (links: ChainLink[]) => links.map((l) => l.branch).join(' → ');
 
 /**
@@ -337,42 +339,74 @@ export async function pushChain() {
   const worktrees = await listWorktrees();
   const links = planChain(await resolveChain(worktrees), worktrees, { requireWorktrees: false });
 
-  if (!(await promptConfirm(`Push ${arrow(links)} to origin?`))) {
+  await confirmAndPush(links, 'geet wt base pull --chain');
+}
+
+interface PendingPush {
+  branch: string;
+  /** Commits origin lacks; undefined when the branch is not on origin yet. */
+  ahead?: number;
+  /** Commits origin has that the branch lacks (a push will be rejected when > 0). */
+  behind: number;
+}
+
+/** Fetches, then lists the links with local commits that a push would send to origin. */
+async function findPendingPushes(links: ChainLink[]): Promise<PendingPush[]> {
+  await withSpinner('Fetching...', 'Fetched.', () => fetchAll());
+
+  const pending: PendingPush[] = [];
+  for (const { branch } of links) {
+    if (!(await remoteTrackingExists(branch))) {
+      pending.push({ branch, behind: 0 });
+      continue;
+    }
+    const [behind, ahead] = await countBehindAhead(`origin/${branch}`, branch);
+    if (ahead > 0) pending.push({ branch, ahead, behind });
+  }
+  return pending;
+}
+
+function formatPendingPushes(pending: PendingPush[]): string {
+  const width = Math.max(...pending.map((p) => p.branch.length));
+  const lines = pending.map((p) => {
+    const note =
+      p.ahead === undefined
+        ? 'new on origin'
+        : `${p.ahead} ${p.ahead === 1 ? 'commit' : 'commits'} to push` +
+          (p.behind > 0 ? ` (origin has ${p.behind} you lack — push will be rejected)` : '');
+    return `  ${p.branch.padEnd(width)}  ${note}`;
+  });
+  return `Branches with changes to push:\n${lines.join('\n')}`;
+}
+
+/**
+ * Shows which links would actually change origin, asks once for all of them, then pushes
+ * them in order. Links already matching origin are left out of the list and the push.
+ */
+async function confirmAndPush(links: ChainLink[], pullCommand: string) {
+  const pending = await findPendingPushes(links);
+  if (pending.length === 0) {
+    outro('Nothing to push; every branch is up to date on origin.');
+    return;
+  }
+
+  logInfo(formatPendingPushes(pending));
+  if (!(await promptConfirm(`Push ${count(pending.length)} to origin?`, { initialValue: false }))) {
     outro('Cancelled.');
     return;
   }
 
-  await pushLinks(links, 'geet wt base pull --chain');
-  outro('Done.');
-}
-
-/** Pushes each link that differs from origin, in order. */
-async function pushLinks(links: ChainLink[], pullCommand: string) {
-  await withSpinner('Fetching...', 'Fetched.', () => fetchAll());
-
-  for (const link of links) {
-    if (await isPushed(link.branch)) {
-      logInfo(`"${link.branch}" is already up to date on origin.`);
-      continue;
-    }
+  for (const { branch } of pending) {
     try {
-      await withSpinner(`Pushing "${link.branch}"...`, `Pushed "${link.branch}".`, () =>
-        pushBranch(link.branch),
-      );
+      await withSpinner(`Pushing "${branch}"...`, `Pushed "${branch}".`, () => pushBranch(branch));
     } catch (err) {
       throw new GeetError(
-        `Could not push "${link.branch}": ${userMessage(err)}\n` +
+        `Could not push "${branch}": ${userMessage(err)}\n` +
           `If origin has newer commits, run "${pullCommand}" (or merge them) and re-run.`,
       );
     }
   }
-}
-
-/** True when origin/<branch> exists and points at the same commit as the local branch. */
-async function isPushed(branch: string): Promise<boolean> {
-  if (!(await remoteTrackingExists(branch))) return false;
-  const [behind, ahead] = await countBehindAhead(`origin/${branch}`, branch);
-  return behind === 0 && ahead === 0;
+  outro('Done.');
 }
 
 // ── --tree ────────────────────────────────────────────────────────────────────
@@ -432,8 +466,6 @@ async function planTree(): Promise<TreeNode[] | undefined> {
   logInfo(formatTree(nodes));
   return nodes;
 }
-
-const count = (n: number) => `${n} ${n === 1 ? 'branch' : 'branches'}`;
 
 /**
  * `geet wt base merge --tree`: pulls every descendant of the current branch, then merges
@@ -503,10 +535,5 @@ export async function pushTree() {
   const nodes = await planTree();
   if (!nodes) return;
 
-  if (!(await promptConfirm(`Push ${count(nodes.length)} to origin as shown?`))) {
-    outro('Cancelled.');
-    return;
-  }
-  await pushLinks(nodes, 'geet wt base pull --tree');
-  outro('Done.');
+  await confirmAndPush(nodes, 'geet wt base pull --tree');
 }

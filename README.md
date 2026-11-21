@@ -275,7 +275,7 @@ For `develop → epic → feature` setups, `--chain` keeps a branch up to date w
 
 Then it checks each chain branch's worktree for uncommitted changes (same prompt as a single merge; `--force` skips it), asks to confirm, and works from the root down: pull a branch, merge it into its child, repeat until the current branch. Every branch being merged into must be checked out in a worktree (geet stops before changing anything otherwise), and the root is only fast-forwarded. A merge conflict stops the run in that worktree; resolve it and re-run to continue. `base pull --chain` walks and confirms the same way, with the same uncommitted-changes prompt, then fast-forwards each base from the root down. The current branch is left alone, as in a plain `base pull`, and no worktrees are required. If any pull fails (for example the epic has local commits and origin has new ones), it stops there.
 
-`base push --chain` pushes every branch in the chain, root first and including the current branch, after a confirmation. Branches already matching origin are skipped, and pushes are never forced: a rejected push stops the run. A plain `base push` pushes just the base.
+`base push --chain` lists the branches in the chain (root first, including the current one) that have local commits to push, then asks once to confirm. Branches already matching origin are left out, and pushes are never forced: a rejected push stops the run. A plain `base push` pushes just the base.
 
 #### `--tree`: `base merge`, `base pull`, `base push`
 
@@ -283,7 +283,7 @@ The mirror image of `--chain`: instead of going up to the bases, geet goes down.
 
 - `base merge --tree` pulls every descendant from origin (skip with `--no-pull`), then merges each branch into its children, parents first. The current branch is the source and is neither pulled nor changed. A merge conflict stops the run in that worktree; resolve it and re-run to continue.
 - `base pull --tree` fast-forwards every descendant from origin, parents first.
-- `base push --tree` pushes the current branch and every descendant, parents first, never forced.
+- `base push --tree` pushes the current branch and every descendant, parents first, never forced, after listing which have commits to push.
 
 There is no `--chain` for `rebase`, since rebasing a shared epic branch rewrites history others have pulled.
 
